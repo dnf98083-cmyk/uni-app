@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -10,11 +11,14 @@ import {
   View,
 } from 'react-native';
 import { router } from 'expo-router';
+import { supabase } from '@/lib/supabase';
 
 type Tab = 'login' | 'signup';
 
 export default function LoginScreen() {
   const [activeTab, setActiveTab] = useState<Tab>('login');
+  const [loading, setLoading] = useState(false);
+  const [loginError, setLoginError] = useState('');
 
   // 로그인 폼 상태
   const [loginEmail, setLoginEmail] = useState('');
@@ -26,14 +30,29 @@ export default function LoginScreen() {
   const [signupPassword, setSignupPassword] = useState('');
   const [signupPasswordConfirm, setSignupPasswordConfirm] = useState('');
 
-  const handleLogin = () => {
-    // TODO: 실제 인증 로직 연동
-    router.replace('/(tabs)');
+  const handleLogin = async () => {
+    if (!loginEmail || !loginPassword) {
+      setLoginError('이메일과 비밀번호를 입력해주세요.');
+      return;
+    }
+    try {
+      setLoading(true);
+      setLoginError('');
+      const { error } = await supabase.auth.signInWithPassword({
+        email: loginEmail,
+        password: loginPassword,
+      });
+      if (error) throw error;
+      router.replace('/(tabs)');
+    } catch {
+      setLoginError('아이디 또는 비밀번호가 틀렸습니다.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSignup = () => {
-    // TODO: 실제 회원가입 로직 연동
-    router.replace('/(tabs)');
+    router.push('/onboarding/register');
   };
 
   return (
@@ -67,7 +86,7 @@ export default function LoginScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.tab, activeTab === 'signup' && styles.tabActive]}
-              onPress={() => setActiveTab('signup')}
+              onPress={() => router.push('/onboarding/register')}
             >
               <Text style={[styles.tabText, activeTab === 'signup' && styles.tabTextActive]}>
                 회원가입
@@ -103,12 +122,21 @@ export default function LoginScreen() {
                 />
               </View>
 
+              {loginError ? (
+                <View style={styles.errorBox}>
+                  <Text style={styles.errorBoxText}>⚠️ {loginError}</Text>
+                </View>
+              ) : null}
+
               <TouchableOpacity style={styles.forgotBtn}>
                 <Text style={styles.forgotText}>비밀번호를 잊으셨나요?</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.primaryBtn} onPress={handleLogin}>
-                <Text style={styles.primaryBtnText}>로그인</Text>
+              <TouchableOpacity style={styles.primaryBtn} onPress={handleLogin} disabled={loading}>
+                {loading
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={styles.primaryBtnText}>로그인</Text>
+                }
               </TouchableOpacity>
 
               <View style={styles.dividerRow}>
@@ -266,6 +294,21 @@ const styles = StyleSheet.create({
   },
   tabTextActive: {
     color: '#a78bfa',
+  },
+
+  /* 에러 박스 */
+  errorBox: {
+    backgroundColor: 'rgba(255, 80, 80, 0.1)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#ff5050',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  errorBoxText: {
+    fontSize: 13,
+    color: '#ff6b6b',
+    fontWeight: '600',
   },
 
   /* 폼 */
