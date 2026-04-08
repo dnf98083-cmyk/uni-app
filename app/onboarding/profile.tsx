@@ -1,5 +1,6 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
     ScrollView,
     StyleSheet,
@@ -8,15 +9,43 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
+import { supabase } from '@/lib/supabase';
 
 const GRADES = ['1학년', '2학년', '3학년', '4학년'];
 
-export default function ProfileScreen() {
+export default function ProfileSetupScreen() {
   const [studentId, setStudentId] = useState('');
   const [department, setDepartment] = useState('');
   const [grade, setGrade] = useState('');
+  const [school, setSchool] = useState<{ name: string; region: string; emoji: string } | null>(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem('selected_school').then(val => {
+      if (val) setSchool(JSON.parse(val));
+    });
+  }, []);
 
   const isReady = studentId && department && grade;
+
+  const handleDone = async () => {
+    if (!isReady) return;
+    try {
+      const meta: Record<string, string> = {
+        student_id: studentId,
+        department,
+        grade,
+      };
+      if (school) {
+        meta.school_name = school.name;
+        meta.school_region = school.region;
+        meta.school_emoji = school.emoji;
+      }
+      await supabase.auth.updateUser({ data: meta });
+    } catch {
+      // 저장 실패해도 진행
+    }
+    router.replace('/(tabs)');
+  };
 
   return (
     <ScrollView style={styles.container}
@@ -24,6 +53,17 @@ export default function ProfileScreen() {
 
       <Text style={styles.title}>기본 정보를 입력해요</Text>
       <Text style={styles.sub}>커뮤니티에서 학교 인증에 사용돼요</Text>
+
+      {/* 선택된 학교 표시 */}
+      {school && (
+        <View style={styles.schoolBadge}>
+          <Text style={styles.schoolEmoji}>{school.emoji}</Text>
+          <View>
+            <Text style={styles.schoolName}>{school.name}</Text>
+            <Text style={styles.schoolRegion}>📍 {school.region}</Text>
+          </View>
+        </View>
+      )}
 
       {/* 학번 */}
       <View style={styles.section}>
@@ -70,7 +110,7 @@ export default function ProfileScreen() {
       {/* 완료 버튼 */}
       <TouchableOpacity
         style={[styles.doneBtn, !isReady && styles.doneBtnDisabled]}
-        onPress={() => isReady && router.replace('/(tabs)')}
+        onPress={handleDone}
         disabled={!isReady}>
         <Text style={styles.doneText}>
           {isReady ? 'Uni 시작하기 🚀' : '모두 입력해주세요'}
@@ -83,7 +123,16 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#07070d', paddingHorizontal: 24, paddingTop: 60 },
   title: { fontSize: 26, fontWeight: '900', color: '#fff', marginBottom: 8 },
-  sub: { fontSize: 14, color: '#888', marginBottom: 36 },
+  sub: { fontSize: 14, color: '#888', marginBottom: 24 },
+  schoolBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: 'rgba(124,111,255,0.1)', borderRadius: 14,
+    borderWidth: 1, borderColor: '#7c6fff',
+    padding: 14, marginBottom: 28,
+  },
+  schoolEmoji: { fontSize: 28 },
+  schoolName: { fontSize: 15, fontWeight: '700', color: '#eee' },
+  schoolRegion: { fontSize: 12, color: '#888', marginTop: 2 },
   section: { marginBottom: 24 },
   label: { fontSize: 13, color: '#888', fontWeight: '600', marginBottom: 8 },
   input: {

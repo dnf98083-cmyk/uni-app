@@ -1,7 +1,10 @@
-import { geminiModel } from '@/lib/gemini';
+import { createGeminiModel } from '@/lib/gemini';
 import { searchLocalData } from '@/lib/localSearch';
-import type { ChatSession } from '@google/generative-ai';
-import { useRef, useState } from 'react';
+import { supabase } from '@/lib/supabase';
+import { useTheme } from '@/lib/ThemeContext';
+import type { ChatSession, GenerativeModel } from '@google/generative-ai';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -13,23 +16,44 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useTheme } from '@/lib/ThemeContext';
 
 type Message = { role: 'user' | 'ai'; text: string };
 
 export default function HomeScreen() {
   const { colors } = useTheme();
   const [message, setMessage] = useState('');
-  const [messages, setMessages] = useState<Message[]>([
-    { role: 'ai', text: '안녕! 나는 신구대 전용 AI 친구 Uni야 🎓\n학교 주변 맛집, 학교생활 고민, 수강신청, 취업 정보까지 뭐든 물어봐!' }
-  ]);
+  const [schoolName, setSchoolName] = useState('');
+  const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const chatRef = useRef<ChatSession | null>(null);
+  const modelRef = useRef<GenerativeModel | null>(null);
+
+  const loadUserSchool = useCallback(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      const meta = data?.user?.user_metadata ?? {};
+      const name = meta.school_name ?? '';
+      const region = meta.school_region ?? '';
+      setSchoolName(name);
+      modelRef.current = createGeminiModel(name || '대학교', region);
+      chatRef.current = null;
+      setMessages([{
+        role: 'ai',
+        text: name
+          ? `안녕! 나는 ${name} 전용 AI 친구 Uni야 🎓\n학교 주변 맛집, 학교생활 고민, 수강신청, 취업 정보까지 뭐든 물어봐!`
+          : '안녕! 나는 AI 친구 Uni야 🎓\n학교생활 고민, 맛집, 수강신청, 취업 정보까지 뭐든 물어봐!',
+      }]);
+    });
+  }, []);
+
+  useFocusEffect(loadUserSchool);
 
   const getChat = () => {
+    if (!modelRef.current) {
+      modelRef.current = createGeminiModel('대학교', '');
+    }
     if (!chatRef.current) {
-      chatRef.current = geminiModel.startChat();
+      chatRef.current = modelRef.current.startChat();
     }
     return chatRef.current;
   };
@@ -61,20 +85,32 @@ export default function HomeScreen() {
     }
   };
 
+  const quickQuestions = schoolName
+    ? [`🍜 ${schoolName} 주변 맛집`, '📚 수강신청 꿀팁', '💰 장학금 정보', `☕ 학교 근처 카페`, '📝 과제 도움', '💼 취업 정보']
+    : ['🍜 주변 맛집 추천', '📚 수강신청 꿀팁', '💰 장학금 정보', '☕ 근처 카페 어디?', '📝 과제 도움', '💼 취업 정보'];
+
   return (
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: colors.bg }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={0}>
 
-      {/* 날씨 바 */}
+      {/* 상단 바 */}
       <View style={[styles.weatherBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={styles.weatherIcon}>🌤️</Text>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.weatherTemp, { color: colors.text }]}>18°C  광주 · 맑음</Text>
+          <Text style={[styles.weatherTemp, { color: colors.text }]}>18°C · 맑음</Text>
           <Text style={[styles.weatherSub, { color: colors.subText }]}>미세먼지 좋음</Text>
         </View>
-        <Text style={styles.commute}>🚌 버스 14분</Text>
+        <TouchableOpacity
+          style={[styles.schoolBadge, { borderColor: colors.border }]}
+          onPress={() => router.push('/edit-profile')}>
+          <Text style={styles.schoolBadgeEmoji}>🏫</Text>
+          <Text style={[styles.schoolBadgeText, { color: colors.subText }]} numberOfLines={1}>
+            {schoolName || '학교 설정'}
+          </Text>
+          <Text style={{ color: colors.subText, fontSize: 10 }}>›</Text>
+        </TouchableOpacity>
       </View>
 
       {/* 채팅 */}
@@ -105,7 +141,7 @@ export default function HomeScreen() {
 
       {/* 빠른 질문 */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickScroll}>
-        {['🍜 주변 맛집 추천', '📚 수강신청 꿀팁', '💰 장학금 정보', '☕ 근처 카페 어디?', '📝 과제 도움', '💼 취업 정보'].map((q, i) => (
+        {quickQuestions.map((q, i) => (
           <TouchableOpacity
             key={i}
             style={[styles.quickPill, { backgroundColor: colors.card, borderColor: colors.border }]}
@@ -121,7 +157,7 @@ export default function HomeScreen() {
           style={[styles.input, { color: colors.text }]}
           value={message}
           onChangeText={setMessage}
-          placeholder="학교 맛집, 학교생활 등 뭐든 물어봐..."
+          placeholder={schoolName ? `${schoolName} 맛집, 학교생활 등 뭐든 물어봐...` : '학교 맛집, 학교생활 등 뭐든 물어봐...'}
           placeholderTextColor={colors.subText}
           multiline
         />
@@ -148,6 +184,14 @@ const styles = StyleSheet.create({
   weatherTemp: { fontSize: 13, fontWeight: '700' },
   weatherSub: { fontSize: 10 },
   commute: { fontSize: 12, color: '#3eeea0', fontWeight: '700' },
+  schoolBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    borderWidth: 1, borderRadius: 20,
+    paddingHorizontal: 10, paddingVertical: 5,
+    maxWidth: 140,
+  },
+  schoolBadgeEmoji: { fontSize: 12 },
+  schoolBadgeText: { fontSize: 11, fontWeight: '600', flex: 1 },
   chat: { flex: 1, paddingHorizontal: 14 },
   bubble: { maxWidth: '85%', padding: 10, borderRadius: 14, marginBottom: 8 },
   userBubble: { alignSelf: 'flex-end', backgroundColor: '#7c6fff' },

@@ -32,7 +32,7 @@ export default function OnboardingScreen() {
     if (current < slides.length - 1) {
       setCurrent(current + 1);
     } else {
-      router.replace('/onboarding/school');
+      router.replace('/onboarding/profile');
     }
   };
 
@@ -42,7 +42,7 @@ export default function OnboardingScreen() {
     <View style={styles.container}>
       {/* 건너뛰기 */}
       <TouchableOpacity style={styles.skip}
-        onPress={() => router.replace('/onboarding/school')}>
+        onPress={() => router.replace('/onboarding/profile')}>
         <Text style={styles.skipText}>건너뛰기</Text>
       </TouchableOpacity>
 

@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import {
   ActivityIndicator,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -47,7 +48,7 @@ export default function RegisterScreen() {
         setErrorMsg('이미 가입된 이메일이에요. 로그인해주세요');
       } else {
         setSuccessMsg(`${nickname}님, 환영해요! 🎉`);
-        setTimeout(() => router.replace('/onboarding/profile'), 1500);
+        setTimeout(() => router.replace('/onboarding'), 1500);
       }
     } catch (e: any) {
       setErrorMsg(e?.message || '네트워크 오류가 발생했어요');
@@ -57,6 +58,7 @@ export default function RegisterScreen() {
   };
 
   const handleLogin = async () => {
+    Keyboard.dismiss();
     clearMessages();
     if (!email || !password) {
       setErrorMsg('이메일과 비밀번호를 입력해주세요');
@@ -74,7 +76,7 @@ export default function RegisterScreen() {
       } else {
         const name = data.user?.user_metadata?.nickname ?? '';
         setSuccessMsg(name ? `${name}님, 돌아오셨군요! 👋` : '환영해요! 👋');
-        setTimeout(() => router.replace('/(tabs)'), 1500);
+        setTimeout(() => router.replace('/(tabs)'), 800);
       }
     } catch (e: any) {
       setErrorMsg(e?.message || '네트워크 오류가 발생했어요');

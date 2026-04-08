@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -8,25 +9,33 @@ import {
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/lib/ThemeContext';
-import { router } from 'expo-router';
 
 export default function ProfileScreen() {
   const { colors } = useTheme();
   const [email, setEmail] = useState('');
   const [nickname, setNickname] = useState('');
+  const [schoolName, setSchoolName] = useState('');
+  const [schoolEmoji, setSchoolEmoji] = useState('🏫');
   const [loading, setLoading] = useState(true);
   const [logoutMsg, setLogoutMsg] = useState('');
   const [logoutLoading, setLogoutLoading] = useState(false);
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data?.user) {
-        setEmail(data.user.email ?? '');
-        setNickname(data.user.user_metadata?.nickname ?? '학생');
-      }
-      setLoading(false);
-    });
-  }, []);
+  // 프로필 편집 후 돌아왔을 때 최신 정보 반영
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      supabase.auth.getUser().then(({ data }) => {
+        if (data?.user) {
+          const meta = data.user.user_metadata ?? {};
+          setEmail(data.user.email ?? '');
+          setNickname(meta.nickname ?? '학생');
+          setSchoolName(meta.school_name ?? '');
+          setSchoolEmoji(meta.school_emoji ?? '🏫');
+        }
+        setLoading(false);
+      });
+    }, [])
+  );
 
   const handleLogout = async () => {
     setLogoutLoading(true);
@@ -52,7 +61,11 @@ export default function ProfileScreen() {
           <Text style={styles.avatarText}>{initials}</Text>
         </View>
         <Text style={[styles.nickname, { color: colors.text }]}>{loading ? '...' : nickname}</Text>
-        <Text style={[styles.school, { color: colors.subText }]}>🏫 신구대학교</Text>
+        {schoolName ? (
+          <Text style={[styles.school, { color: colors.subText }]}>{schoolEmoji} {schoolName}</Text>
+        ) : (
+          <Text style={[styles.school, { color: colors.subText }]}>🏫 학교 미설정</Text>
+        )}
       </View>
 
       {/* 계정 정보 */}
@@ -60,14 +73,25 @@ export default function ProfileScreen() {
         <Text style={[styles.cardTitle, { color: colors.cardTitle }]}>계정 정보</Text>
         <InfoRow label="닉네임" value={loading ? '...' : nickname} colors={colors} />
         <InfoRow label="이메일" value={loading ? '...' : email} colors={colors} />
-        <InfoRow label="학교" value="신구대학교" colors={colors} />
+        <InfoRow label="학교" value={loading ? '...' : (schoolName || '미설정')} colors={colors} />
+      </View>
+
+      {/* 설정 */}
+      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <Text style={[styles.cardTitle, { color: colors.cardTitle }]}>설정</Text>
+        <TouchableOpacity
+          style={[styles.actionRow, { borderTopColor: colors.border }]}
+          onPress={() => router.push('/edit-profile')}>
+          <Text style={[styles.actionLabel, { color: colors.text }]}>프로필 편집</Text>
+          <Text style={[styles.actionArrow, { color: colors.subText }]}>닉네임 · 학교 변경 ›</Text>
+        </TouchableOpacity>
       </View>
 
       {/* 앱 정보 */}
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.cardTitle, { color: colors.cardTitle }]}>앱 정보</Text>
         <InfoRow label="버전" value="1.0.0" colors={colors} />
-        <InfoRow label="서비스" value="신구대학교 전용" colors={colors} />
+        <InfoRow label="서비스" value="대학교 AI 커뮤니티" colors={colors} />
       </View>
 
       {/* 로그아웃 */}
@@ -89,7 +113,7 @@ function InfoRow({ label, value, colors }: { label: string; value: string; color
   return (
     <View style={[styles.row, { borderTopColor: colors.border }]}>
       <Text style={[styles.rowLabel, { color: colors.rowLabel }]}>{label}</Text>
-      <Text style={[styles.rowValue, { color: colors.rowValue }]}>{value}</Text>
+      <Text style={[styles.rowValue, { color: colors.rowValue }]} numberOfLines={1}>{value}</Text>
     </View>
   );
 }
@@ -135,6 +159,14 @@ const styles = StyleSheet.create({
   },
   rowLabel: { fontSize: 14 },
   rowValue: { fontSize: 14, fontWeight: '600', maxWidth: '60%', textAlign: 'right' },
+  actionRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 14,
+    borderTopWidth: 1,
+  },
+  actionLabel: { fontSize: 14, fontWeight: '600' },
+  actionSub: { fontSize: 11, marginTop: 2 },
+  actionArrow: { fontSize: 12 },
   logoutBtn: {
     borderRadius: 14,
     height: 52,
