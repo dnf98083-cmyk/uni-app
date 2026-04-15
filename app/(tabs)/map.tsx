@@ -803,21 +803,27 @@ export default function MapScreen() {
   };
 
   const searchByName = async () => {
-    if (!nameQuery.trim() || !location) return;
+    if (!nameQuery.trim()) return;
     setLoading(true);
     setError('');
     try {
       const h = kakaoHeaders();
-      const { lat, lng } = location;
       const q = schoolQuery.trim() ? `${schoolQuery} ${nameQuery.trim()}` : nameQuery.trim();
+      const locPart = location ? `&x=${location.lng}&y=${location.lat}&radius=3000` : '';
       const res = await fetch(
-        `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(q)}&x=${lng}&y=${lat}&radius=2000&size=20`,
+        `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(q)}${locPart}&size=20`,
         { headers: h }
       );
       const data = await res.json();
       const results = mapDocs(data.documents ?? [], '');
       setPlaces(results);
-      if (mapReady) postToMap({ type: 'markers', places: results });
+      if (results.length > 0) {
+        // 첫 번째 결과로 지도 중심 이동
+        const first = results[0];
+        if (!location) setLocation({ lat: first.lat, lng: first.lng });
+        postToMap({ type: 'markers', places: results });
+        postToMap({ type: 'center', lat: first.lat, lng: first.lng });
+      }
       if (results.length === 0) setError('검색 결과가 없어요');
     } catch (e: any) {
       setError(e.message || '검색 중 오류가 발생했어요');
@@ -864,7 +870,7 @@ export default function MapScreen() {
         <View style={styles.searchRow}>
           <TextInput
             style={[styles.searchInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
-            placeholder="학교 이름 검색 (예: 연세대학교)"
+            placeholder="학교 이름 검색 (예: 신구대학교)"
             placeholderTextColor={colors.subText}
             value={schoolQuery}
             onChangeText={setSchoolQuery}
@@ -875,6 +881,31 @@ export default function MapScreen() {
             {loading
               ? <ActivityIndicator color="#fff" size="small" />
               : <Text style={styles.searchBtnText}>검색</Text>}
+          </TouchableOpacity>
+        </View>
+
+        {/* 음식점 이름 검색 */}
+        <View style={[styles.nameSearchRow, { backgroundColor: colors.card, borderColor: colors.border, marginHorizontal: 14, marginBottom: 8 }]}>
+          <Text>🍽️ </Text>
+          <TextInput
+            style={[styles.nameSearchInput, { color: colors.text }]}
+            placeholder="음식점 이름으로 검색"
+            placeholderTextColor={colors.subText}
+            value={nameQuery}
+            onChangeText={setNameQuery}
+            onSubmitEditing={searchByName}
+            returnKeyType="search"
+          />
+          {nameQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setNameQuery('')}>
+              <Text style={{ color: colors.subText, fontSize: 16 }}>✕</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            style={[styles.searchBtn, { marginLeft: 6 }]}
+            onPress={searchByName}
+            disabled={loading}>
+            <Text style={styles.searchBtnText}>검색</Text>
           </TouchableOpacity>
         </View>
 
@@ -941,32 +972,6 @@ export default function MapScreen() {
 
       {/* 맛집 리스트 */}
       <View style={styles.listSection}>
-
-        {location && (
-          <View style={[styles.nameSearchRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text>🔍 </Text>
-            <TextInput
-              style={[styles.nameSearchInput, { color: colors.text }]}
-              placeholder="음식점 이름으로 검색"
-              placeholderTextColor={colors.subText}
-              value={nameQuery}
-              onChangeText={setNameQuery}
-              onSubmitEditing={searchByName}
-              returnKeyType="search"
-            />
-            {nameQuery.length > 0 && (
-              <TouchableOpacity onPress={() => { setNameQuery(''); }}>
-                <Text style={{ color: colors.subText, fontSize: 16 }}>✕</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={[styles.searchBtn, { marginLeft: 6 }]}
-              onPress={searchByName}
-              disabled={loading}>
-              <Text style={styles.searchBtnText}>검색</Text>
-            </TouchableOpacity>
-          </View>
-        )}
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
