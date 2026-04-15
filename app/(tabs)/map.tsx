@@ -700,14 +700,27 @@ export default function MapScreen() {
 
     supabase.auth.getUser().then(async ({ data }) => {
       const meta = data?.user?.user_metadata ?? {};
-      const name = (meta.school_name ?? '').trim();
+      const name = (meta.school_name ?? meta.schoolName ?? '').trim();
       if (!name) return;
       setSchoolQuery(name);
       try {
         const loc = await searchSchoolLocation(name);
         setLocation(loc);
         const cat = found ?? CATEGORIES[0];
-        await loadPlaces(loc.lat, loc.lng, cat, name);
+        const h = kakaoHeaders();
+        const base = `x=${loc.lng}&y=${loc.lat}&radius=2000&size=20`;
+        const keyword = CAT_KEYWORD[cat.label] ?? cat.label;
+        const query = cat.label === '전체' ? `${name} 맛집` : `${name} ${keyword}`;
+        const code = cat.label === '카페' ? 'CE7' : cat.label !== '전체' ? 'FD6' : '';
+        const res = await fetch(
+          `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}${code ? `&category_group_code=${code}` : ''}&${base}`,
+          { headers: h }
+        );
+        const json = await res.json();
+        const results = mapDocs(json.documents ?? [], code);
+        setPlaces(results);
+        postToMap({ type: 'markers', places: results });
+        postToMap({ type: 'center', lat: loc.lat, lng: loc.lng });
       } catch {}
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -782,6 +795,30 @@ export default function MapScreen() {
       if (results.length === 0) setError('해당 카테고리 결과가 없어요');
     } catch (e: any) {
       setError(e.message || '장소 검색 중 오류가 발생했어요');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const searchByName = async () => {
+    if (!nameQuery.trim() || !location) return;
+    setLoading(true);
+    setError('');
+    try {
+      const h = kakaoHeaders();
+      const { lat, lng } = location;
+      const q = schoolQuery.trim() ? `${schoolQuery} ${nameQuery.trim()}` : nameQuery.trim();
+      const res = await fetch(
+        `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(q)}&x=${lng}&y=${lat}&radius=2000&size=20`,
+        { headers: h }
+      );
+      const data = await res.json();
+      const results = mapDocs(data.documents ?? [], '');
+      setPlaces(results);
+      if (mapReady) postToMap({ type: 'markers', places: results });
+      if (results.length === 0) setError('검색 결과가 없어요');
+    } catch (e: any) {
+      setError(e.message || '검색 중 오류가 발생했어요');
     } finally {
       setLoading(false);
     }
@@ -908,16 +945,24 @@ export default function MapScreen() {
             <Text>🔍 </Text>
             <TextInput
               style={[styles.nameSearchInput, { color: colors.text }]}
-              placeholder="맛집 이름으로 검색"
+              placeholder="음식점 이름으로 검색"
               placeholderTextColor={colors.subText}
               value={nameQuery}
               onChangeText={setNameQuery}
+              onSubmitEditing={searchByName}
+              returnKeyType="search"
             />
             {nameQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setNameQuery('')}>
+              <TouchableOpacity onPress={() => { setNameQuery(''); }}>
                 <Text style={{ color: colors.subText, fontSize: 16 }}>✕</Text>
               </TouchableOpacity>
             )}
+            <TouchableOpacity
+              style={[styles.searchBtn, { marginLeft: 6 }]}
+              onPress={searchByName}
+              disabled={loading}>
+              <Text style={styles.searchBtnText}>검색</Text>
+            </TouchableOpacity>
           </View>
         )}
 
