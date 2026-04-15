@@ -715,11 +715,15 @@ export default function MapScreen() {
         const loc = await searchSchoolLocation(name);
         setLocation(loc);
         if (mapReady) postToMap({ type: 'center', lat: loc.lat, lng: loc.lng });
-        const results = await fetchPlaces(loc.lat, loc.lng, found, name);
-        setPlaces(results);
-        if (results.length === 0) setError('해당 카테고리 결과가 없어요');
-      } catch (e: any) {
-        setError(e.message || '장소 검색 중 오류가 발생했어요');
+        try {
+          const results = await fetchPlaces(loc.lat, loc.lng, found, name);
+          setPlaces(results);
+          if (results.length === 0) setError('해당 카테고리 결과가 없어요');
+        } catch {
+          setError('맛집 정보를 불러오지 못했어요. 위에서 직접 검색해보세요!');
+        }
+      } catch {
+        setError('학교 위치를 찾지 못했어요. 위 검색창에서 학교 이름을 직접 입력해보세요!');
       } finally {
         setLoading(false);
       }
