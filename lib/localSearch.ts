@@ -144,3 +144,77 @@ export function searchLocalData(query: string): string | null {
     .map(entry => `📌 [${entry.category}]\n${entry.content}`)
     .join('\n\n');
 }
+
+// ── 시간표 컨텍스트 ────────────────────────────────────────────
+const DAYS_KR = ['월', '화', '수', '목', '금'];
+
+const TIMETABLE_KEYWORDS = [
+  '시간표', '수업시간', '오늘수업', '내수업', '강의시간',
+  '몇시에', '수업있', '수업없', '강의실', '강의있', '요일수업',
+];
+
+export function isTimetableQuery(query: string): boolean {
+  const lower = query.toLowerCase().replace(/\s+/g, '');
+  return TIMETABLE_KEYWORDS.some(k => lower.includes(k));
+}
+
+export function formatTimetableContext(classesJson: string, query: string): string | null {
+  try {
+    const classes: Array<{
+      name: string; room: string; professor: string;
+      day: number; startTime: string; endTime: string;
+    }> = JSON.parse(classesJson);
+    if (!classes || classes.length === 0) return '📅 등록된 시간표가 없어요.';
+
+    const lower = query.toLowerCase().replace(/\s+/g, '');
+    const isToday = lower.includes('오늘') || lower.includes('today') || lower.includes('지금');
+    const dayIdx = DAYS_KR.findIndex(d => lower.includes(d) && lower.includes('요일'));
+
+    let targetDay: number | null = null;
+    if (isToday) {
+      const d = new Date().getDay(); // 1=월...5=금, 0=일, 6=토
+      targetDay = d >= 1 && d <= 5 ? d - 1 : null;
+    } else if (dayIdx !== -1) {
+      targetDay = dayIdx;
+    }
+
+    const byDay: Record<number, typeof classes> = {};
+    for (const c of classes) {
+      if (!byDay[c.day]) byDay[c.day] = [];
+      byDay[c.day].push(c);
+    }
+
+    const formatDay = (idx: number) => {
+      const sorted = [...(byDay[idx] ?? [])].sort((a, b) => a.startTime.localeCompare(b.startTime));
+      return sorted.map(c =>
+        `  · ${c.startTime}~${c.endTime} ${c.name}` +
+        (c.room ? ` (강의실: ${c.room})` : '') +
+        (c.professor ? ` [${c.professor}교수]` : '')
+      ).join('\n');
+    };
+
+    if (targetDay !== null) {
+      const dayName = DAYS_KR[targetDay] ?? '';
+      const list = byDay[targetDay] ?? [];
+      if (list.length === 0) return `📅 ${dayName}요일은 수업이 없어요!`;
+      return `📅 ${dayName}요일 수업:\n${formatDay(targetDay)}`;
+    }
+
+    const lines = [0, 1, 2, 3, 4]
+      .filter(i => (byDay[i] ?? []).length > 0)
+      .map(i => `${DAYS_KR[i]}요일:\n${formatDay(i)}`);
+    return `📅 내 시간표 (전체):\n${lines.join('\n')}`;
+  } catch {
+    return null;
+  }
+}
+
+// ── 커뮤니티 쿼리 감지 ────────────────────────────────────────
+const COMMUNITY_KEYWORDS = [
+  '커뮤니티', '게시글', '글있', '공지', '후기', '학우', '학생들', '게시판', '올라온', '올린글', '커뮤에',
+];
+
+export function isCommunityQuery(query: string): boolean {
+  const lower = query.toLowerCase().replace(/\s+/g, '');
+  return COMMUNITY_KEYWORDS.some(k => lower.includes(k));
+}

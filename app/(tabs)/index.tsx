@@ -1,7 +1,8 @@
 import { createGeminiModel } from '@/lib/gemini';
-import { searchLocalData } from '@/lib/localSearch';
+import { formatTimetableContext, isCommunityQuery, isTimetableQuery, searchLocalData } from '@/lib/localSearch';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/lib/ThemeContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { ChatSession, GenerativeModel } from '@google/generative-ai';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
@@ -42,6 +43,7 @@ export default function HomeScreen() {
   const { colors } = useTheme();
   const [message, setMessage] = useState('');
   const [schoolName, setSchoolName] = useState('');
+  const [userId, setUserId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
@@ -50,6 +52,8 @@ export default function HomeScreen() {
 
   const loadUserSchool = useCallback(() => {
     supabase.auth.getUser().then(({ data }) => {
+      const uid = data?.user?.id ?? null;
+      setUserId(uid);
       const meta = data?.user?.user_metadata ?? {};
       const name = meta.school_name ?? '';
       const region = meta.school_region ?? '';
@@ -77,6 +81,33 @@ export default function HomeScreen() {
     return chatRef.current;
   };
 
+  // 커뮤니티 게시글 검색 (Supabase)
+  const searchCommunityPosts = async (query: string): Promise<string | null> => {
+    try {
+      const { data } = await supabase
+        .from('posts')
+        .select('tab, title, body, author_nickname, is_anonymous, created_at')
+        .order('created_at', { ascending: false })
+        .limit(60);
+      if (!data || data.length === 0) return null;
+
+      const keywords = query.split(/\s+/).filter(w => w.length > 1);
+      const matched = data.filter(post => {
+        const content = `${post.title} ${post.body}`.toLowerCase();
+        return keywords.some(k => content.includes(k.toLowerCase()));
+      }).slice(0, 5);
+
+      if (matched.length === 0) return null;
+
+      const lines = matched.map(p =>
+        `[${p.tab}] ${p.title}\n${p.body.slice(0, 120)}${p.body.length > 120 ? '...' : ''}`
+      );
+      return `💬 커뮤니티 관련 글 (${matched.length}개):\n${lines.join('\n\n')}`;
+    } catch {
+      return null;
+    }
+  };
+
   const sendMessage = async () => {
     const text = message.trim();
     if (!text || loading) return;
@@ -86,10 +117,36 @@ export default function HomeScreen() {
     setLoading(true);
 
     try {
-      const localContext = searchLocalData(text);
-      const prompt = localContext
-        ? `[앱 내 정보]\n${localContext}\n\n[사용자 질문]\n${text}`
+      const contexts: string[] = [];
+
+      // 1. 시간표 컨텍스트
+      if (isTimetableQuery(text)) {
+        const uid = userId ?? (await supabase.auth.getUser()).data.user?.id;
+        if (uid) {
+          const stored = await AsyncStorage.getItem(`timetable_${uid}`);
+          if (stored) {
+            const timetableCtx = formatTimetableContext(stored, text);
+            if (timetableCtx) contexts.push(timetableCtx);
+          } else {
+            contexts.push('📅 아직 시간표가 등록되지 않았어요. 시간표 탭에서 먼저 등록해보세요!');
+          }
+        }
+      }
+
+      // 2. 커뮤니티 컨텍스트
+      if (isCommunityQuery(text)) {
+        const communityCtx = await searchCommunityPosts(text);
+        if (communityCtx) contexts.push(communityCtx);
+      }
+
+      // 3. 앱 내 일반 팁
+      const localCtx = searchLocalData(text);
+      if (localCtx) contexts.push(localCtx);
+
+      const prompt = contexts.length > 0
+        ? `[앱 내 정보]\n${contexts.join('\n\n')}\n\n[사용자 질문]\n${text}`
         : text;
+
       const result = await getChat().sendMessage(prompt);
       const reply = result.response.text();
       const mapCategory = detectMapCategory(text) ?? detectMapCategory(reply) ?? undefined;

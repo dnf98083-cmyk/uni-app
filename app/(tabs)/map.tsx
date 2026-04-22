@@ -57,6 +57,7 @@ type Place = {
   lat: number;
   lng: number;
   url: string;
+  source?: 'kakao' | 'registered';
 };
 
 type Review = {
@@ -254,6 +255,31 @@ const fetchPlacesKakao = async (lat: number, lng: number, cat: typeof CATEGORIES
 
   const data = await kw(query, cat.code);
   return mapDocs(data.documents ?? [], cat.code);
+};
+
+// ── 등록된 맛집 Supabase 조회 ────────────────────────────────
+const fetchRegisteredRestaurants = async (schoolName: string): Promise<Place[]> => {
+  if (!schoolName) return [];
+  try {
+    const { data } = await supabase
+      .from('restaurants')
+      .select('*')
+      .ilike('school_name', schoolName);
+    return (data ?? []).map((r: any) => ({
+      id: `reg_${r.id}`,
+      name: r.name,
+      categorySimple: (r.category as string) ?? '기타',
+      categoryDetail: r.note ? r.note.slice(0, 30) : '',
+      address: r.address ?? '',
+      phone: r.phone ?? '',
+      lat: r.lat,
+      lng: r.lng,
+      url: '',
+      source: 'registered' as const,
+    }));
+  } catch {
+    return [];
+  }
 };
 
 // ── 플랫폼별 분기 ────────────────────────────────────────────
@@ -671,6 +697,159 @@ function PlaceDetailSheet({
   );
 }
 
+// ── 맛집 등록 모달 ───────────────────────────────────────────
+function RegisterModal({
+  visible,
+  onClose,
+  colors,
+  schoolName,
+  location,
+}: {
+  visible: boolean;
+  onClose: (registered?: boolean) => void;
+  colors: any;
+  schoolName: string;
+  location: { lat: number; lng: number } | null;
+}) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Place[]>([]);
+  const [selected, setSelected] = useState<Place | null>(null);
+  const [note, setNote] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!visible) {
+      setSearchQuery(''); setSearchResults([]); setSelected(null);
+      setNote(''); setError('');
+    }
+  }, [visible]);
+
+  const doSearch = async () => {
+    if (!searchQuery.trim()) return;
+    setSearching(true); setError('');
+    try {
+      const h = kakaoHeaders();
+      const q = schoolName ? `${schoolName} ${searchQuery.trim()}` : searchQuery.trim();
+      const locPart = location ? `&x=${location.lng}&y=${location.lat}&radius=3000` : '';
+      const res = await fetch(
+        `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(q)}${locPart}&size=15`,
+        { headers: h }
+      );
+      const data = await res.json();
+      setSearchResults(mapDocs(data.documents ?? [], ''));
+    } catch { setError('검색 중 오류가 발생했어요'); }
+    finally { setSearching(false); }
+  };
+
+  const doRegister = async () => {
+    if (!selected) return;
+    setSubmitting(true); setError('');
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setError('로그인이 필요해요'); return; }
+      await supabase.from('restaurants').insert({
+        kakao_id: selected.id,
+        name: selected.name,
+        category: selected.categorySimple,
+        address: selected.address,
+        phone: selected.phone,
+        lat: selected.lat,
+        lng: selected.lng,
+        note: note.trim(),
+        school_name: schoolName,
+        registered_by: user.id,
+      });
+      onClose(true);
+    } catch { setError('등록 중 오류가 발생했어요'); }
+    finally { setSubmitting(false); }
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={() => onClose()}>
+      <TouchableWithoutFeedback onPress={() => onClose()}>
+        <View style={sheetStyles.backdrop} />
+      </TouchableWithoutFeedback>
+      <View style={[regStyles.sheet, { backgroundColor: colors.card }]}>
+        <View style={[sheetStyles.handle, { backgroundColor: colors.border }]} />
+        <View style={regStyles.titleRow}>
+          <Text style={[regStyles.title, { color: colors.text }]}>🍽️ 맛집 등록하기</Text>
+          <TouchableOpacity onPress={() => onClose()}>
+            <Text style={{ fontSize: 18, color: colors.subText }}>✕</Text>
+          </TouchableOpacity>
+        </View>
+        <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          {!selected ? (
+            <>
+              <View style={[regStyles.searchRow, { backgroundColor: colors.bg, borderColor: colors.border }]}>
+                <TextInput
+                  style={[regStyles.searchInput, { color: colors.text }]}
+                  placeholder="음식점 이름을 검색하세요"
+                  placeholderTextColor={colors.subText}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  onSubmitEditing={doSearch}
+                  returnKeyType="search"
+                />
+                <TouchableOpacity style={regStyles.searchBtn} onPress={doSearch} disabled={searching}>
+                  <Text style={regStyles.searchBtnText}>검색</Text>
+                </TouchableOpacity>
+              </View>
+              {searching && <ActivityIndicator color="#7c6fff" style={{ marginVertical: 12 }} />}
+              {error ? <Text style={regStyles.error}>{error}</Text> : null}
+              {searchResults.map(p => (
+                <TouchableOpacity
+                  key={p.id}
+                  style={[regStyles.resultItem, { backgroundColor: colors.bg, borderColor: colors.border }]}
+                  onPress={() => setSelected(p)}>
+                  <Text style={{ fontSize: 22 }}>{CAT_EMOJIS[p.categorySimple] ?? '🍽️'}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text }} numberOfLines={1}>{p.name}</Text>
+                    {p.address ? <Text style={{ fontSize: 11, marginTop: 2, color: colors.subText }} numberOfLines={1}>{p.address}</Text> : null}
+                    <Text style={{ fontSize: 11, color: CAT_COLORS[p.categorySimple] ?? '#7c6fff', fontWeight: '600', marginTop: 2 }}>{p.categorySimple}</Text>
+                  </View>
+                  <Text style={{ color: '#7c6fff', fontSize: 18 }}>›</Text>
+                </TouchableOpacity>
+              ))}
+            </>
+          ) : (
+            <>
+              <View style={[regStyles.selectedCard, { backgroundColor: colors.bg, borderColor: '#7c6fff' }]}>
+                <Text style={{ fontSize: 28 }}>{CAT_EMOJIS[selected.categorySimple] ?? '🍽️'}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: colors.text }}>{selected.name}</Text>
+                  {selected.address ? <Text style={{ fontSize: 11, color: colors.subText, marginTop: 2 }}>{selected.address}</Text> : null}
+                </View>
+                <TouchableOpacity onPress={() => setSelected(null)}>
+                  <Text style={{ color: '#7c6fff', fontSize: 13, fontWeight: '600' }}>변경</Text>
+                </TouchableOpacity>
+              </View>
+              <TextInput
+                style={[regStyles.noteInput, { backgroundColor: colors.bg, borderColor: colors.border, color: colors.text }]}
+                placeholder="추천 이유나 대표 메뉴를 적어보세요 (선택)"
+                placeholderTextColor={colors.subText}
+                value={note}
+                onChangeText={setNote}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+              />
+              {error ? <Text style={regStyles.error}>{error}</Text> : null}
+              <TouchableOpacity style={regStyles.registerBtn} onPress={doRegister} disabled={submitting}>
+                {submitting
+                  ? <ActivityIndicator color="#fff" size="small" />
+                  : <Text style={regStyles.registerBtnText}>등록하기 ✓</Text>}
+              </TouchableOpacity>
+            </>
+          )}
+          <View style={{ height: 30 }} />
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+}
+
 // ── 화면 ────────────────────────────────────────────────────
 export default function MapScreen() {
   const { colors } = useTheme();
@@ -689,6 +868,7 @@ export default function MapScreen() {
   const [mapReady, setMapReady] = useState(false);
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const [sheetVisible, setSheetVisible] = useState(false);
+  const [registerVisible, setRegisterVisible] = useState(false);
 
   const mapHtml = makeMapHtml(KAKAO_JS_KEY);
   const leafletHtml = makeLeafletHtml();
@@ -707,25 +887,15 @@ export default function MapScreen() {
       const name = (meta.school_name ?? meta.schoolName ?? '').trim();
       if (!name) return;
       setSchoolQuery(name);
-      setLoading(true);
-      setError('');
       setPlaces([]);
       setSheetVisible(false);
       try {
         const loc = await searchSchoolLocation(name);
         setLocation(loc);
         if (mapReady) postToMap({ type: 'center', lat: loc.lat, lng: loc.lng });
-        try {
-          const results = await fetchPlaces(loc.lat, loc.lng, found, name);
-          setPlaces(results);
-          if (results.length === 0) setError('해당 카테고리 결과가 없어요');
-        } catch {
-          setError('맛집 정보를 불러오지 못했어요. 위에서 직접 검색해보세요!');
-        }
+        await loadPlaces(loc.lat, loc.lng, found, name);
       } catch {
         setError('학교 위치를 찾지 못했어요. 위 검색창에서 학교 이름을 직접 입력해보세요!');
-      } finally {
-        setLoading(false);
       }
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -751,17 +921,12 @@ export default function MapScreen() {
       const name = (meta.school_name ?? '').trim();
       if (!name) return;
       setSchoolQuery(name);
-      setLoading(true);
-      setError('');
       try {
         const loc = await searchSchoolLocation(name);
         setLocation(loc);
-        const results = await fetchPlaces(loc.lat, loc.lng, CATEGORIES[0], name);
-        setPlaces(results);
+        await loadPlaces(loc.lat, loc.lng, CATEGORIES[0], name);
       } catch {
-        // 자동 검색 실패 시 무시 (사용자가 수동 검색 가능)
-      } finally {
-        setLoading(false);
+        // 자동 검색 실패 시 무시
       }
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -811,7 +976,14 @@ export default function MapScreen() {
     setLoading(true);
     setError('');
     try {
-      const results = await fetchPlaces(lat, lng, cat, school);
+      const [kakaoResults, registeredResults] = await Promise.all([
+        fetchPlaces(lat, lng, cat, school).catch(() => [] as Place[]),
+        fetchRegisteredRestaurants(school),
+      ]);
+      const filteredReg = cat.label === '전체'
+        ? registeredResults
+        : registeredResults.filter(p => p.categorySimple === cat.label);
+      const results = [...filteredReg, ...kakaoResults];
       setPlaces(results);
       if (mapReady) postToMap({ type: 'markers', places: results });
       if (results.length === 0) setError('해당 카테고리 결과가 없어요');
@@ -1036,6 +1208,11 @@ export default function MapScreen() {
                   {place.phone ? (
                     <Text style={[styles.placePhone, { color: colors.subText }]}>📞 {place.phone}</Text>
                   ) : null}
+                  {place.source === 'registered' && (
+                    <View style={styles.regBadge}>
+                      <Text style={styles.regBadgeText}>⭐ 학생 추천</Text>
+                    </View>
+                  )}
                   <Text style={[styles.tapHint, { color: colors.subText }]}>탭하여 리뷰 · 평점 보기 →</Text>
                 </View>
               </TouchableOpacity>
@@ -1048,12 +1225,33 @@ export default function MapScreen() {
 
       </ScrollView>
 
+      {/* 맛집 등록 플로팅 버튼 */}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => setRegisterVisible(true)}>
+        <Text style={styles.fabText}>+ 맛집 등록</Text>
+      </TouchableOpacity>
+
       {/* 장소 상세 하단 시트 */}
       <PlaceDetailSheet
         place={selectedPlace}
         visible={sheetVisible}
         onClose={() => setSheetVisible(false)}
         colors={colors}
+      />
+
+      {/* 맛집 등록 모달 */}
+      <RegisterModal
+        visible={registerVisible}
+        onClose={(registered) => {
+          setRegisterVisible(false);
+          if (registered && location) {
+            loadPlaces(location.lat, location.lng, selectedCat, schoolQuery);
+          }
+        }}
+        colors={colors}
+        schoolName={schoolQuery}
+        location={location}
       />
     </View>
   );
@@ -1095,7 +1293,7 @@ const styles = StyleSheet.create({
   catText: { fontSize: 12, fontWeight: '600' },
   catTextActive: { color: '#fff' },
 
-  mapWrap: { height: 200, marginHorizontal: 16, marginBottom: 10, borderRadius: 16, overflow: 'hidden' },
+  mapWrap: { height: 320, marginHorizontal: 16, marginBottom: 10, borderRadius: 16, overflow: 'hidden' },
   map: { flex: 1 },
   mapPlaceholder: {
     flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 16,
@@ -1141,6 +1339,20 @@ const styles = StyleSheet.create({
   placeAddr: { fontSize: 11, marginTop: 2 },
   placePhone: { fontSize: 11, marginTop: 2 },
   tapHint: { fontSize: 10, marginTop: 5 },
+  regBadge: {
+    backgroundColor: '#7c6fff22', borderRadius: 6,
+    paddingHorizontal: 6, paddingVertical: 2,
+    alignSelf: 'flex-start', marginTop: 4,
+  },
+  regBadgeText: { fontSize: 10, color: '#7c6fff', fontWeight: '700' },
+  fab: {
+    position: 'absolute', bottom: 24, right: 16,
+    backgroundColor: '#7c6fff', borderRadius: 24,
+    paddingHorizontal: 18, paddingVertical: 11,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25, shadowRadius: 8, elevation: 8,
+  },
+  fabText: { color: '#fff', fontSize: 14, fontWeight: '700' },
 });
 
 const sheetStyles = StyleSheet.create({
@@ -1222,4 +1434,48 @@ const sheetStyles = StyleSheet.create({
   reviewStars: { fontSize: 16, fontWeight: '700' },
   reviewDate: { fontSize: 11 },
   reviewBody: { fontSize: 13, lineHeight: 18 },
+});
+
+const regStyles = StyleSheet.create({
+  sheet: {
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8,
+    maxHeight: '85%',
+    shadowColor: '#000', shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15, shadowRadius: 12, elevation: 20,
+  },
+  titleRow: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', marginBottom: 14,
+  },
+  title: { fontSize: 17, fontWeight: '800' },
+  searchRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    borderRadius: 12, borderWidth: 1,
+    paddingHorizontal: 12, paddingVertical: 9, marginBottom: 12,
+  },
+  searchInput: { flex: 1, fontSize: 13 },
+  searchBtn: {
+    backgroundColor: '#7c6fff', borderRadius: 10,
+    paddingHorizontal: 14, paddingVertical: 8,
+  },
+  searchBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  resultItem: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    borderRadius: 12, borderWidth: 1, padding: 12, marginBottom: 8,
+  },
+  selectedCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    borderRadius: 12, borderWidth: 2, padding: 12, marginBottom: 12,
+  },
+  noteInput: {
+    borderWidth: 1, borderRadius: 12, padding: 12,
+    fontSize: 13, minHeight: 80, marginBottom: 12,
+  },
+  registerBtn: {
+    backgroundColor: '#7c6fff', borderRadius: 12,
+    paddingVertical: 14, alignItems: 'center', marginBottom: 8,
+  },
+  registerBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  error: { fontSize: 13, color: '#ff6b6b', marginBottom: 8 },
 });
