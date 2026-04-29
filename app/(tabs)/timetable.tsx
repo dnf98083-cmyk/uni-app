@@ -3,7 +3,6 @@ import { geminiVision } from '@/lib/gemini';
 import { useState, useEffect } from 'react';
 import { useWindowDimensions } from 'react-native';
 import { useTheme } from '@/lib/ThemeContext';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
 import {
   ActivityIndicator,
@@ -124,17 +123,20 @@ export default function TimetableScreen() {
   const [pendingBase64, setPendingBase64] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getUser().then(async ({ data }) => {
       const uid = data?.user?.id ?? null;
       setUserId(uid);
       if (uid) {
-        AsyncStorage.getItem(`timetable_${uid}`).then(val => {
-          if (val) {
-            const parsed = (JSON.parse(val) as ClassItem[]).map(c => ({ professor: '', ...c }));
-            setClasses(assignColorsByName(parsed));
-          }
-          setStorageLoaded(true);
-        });
+        const { data: row } = await supabase
+          .from('user_timetables')
+          .select('classes')
+          .eq('user_id', uid)
+          .single();
+        if (row?.classes) {
+          const parsed = (row.classes as ClassItem[]).map(c => ({ professor: '', ...c }));
+          setClasses(assignColorsByName(parsed));
+        }
+        setStorageLoaded(true);
       } else {
         setStorageLoaded(true);
       }
@@ -143,7 +145,10 @@ export default function TimetableScreen() {
 
   useEffect(() => {
     if (!storageLoaded || !userId) return;
-    AsyncStorage.setItem(`timetable_${userId}`, JSON.stringify(classes));
+    supabase.from('user_timetables').upsert(
+      { user_id: userId, classes, updated_at: new Date().toISOString() },
+      { onConflict: 'user_id' }
+    );
   }, [classes, storageLoaded, userId]);
 
   const [form, setForm] = useState({

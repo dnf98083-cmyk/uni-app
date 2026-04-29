@@ -24,16 +24,23 @@ export default function ProfileScreen() {
   useFocusEffect(
     useCallback(() => {
       setLoading(true);
-      supabase.auth.getUser().then(({ data }) => {
+      const loadProfile = async () => {
+        const { data } = await supabase.auth.getUser();
         if (data?.user) {
-          const meta = data.user.user_metadata ?? {};
           setEmail(data.user.email ?? '');
-          setNickname(meta.nickname ?? '학생');
-          setSchoolName(meta.school_name ?? '');
-          setSchoolEmoji(meta.school_emoji ?? '🏫');
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('nickname, school_name, school_emoji')
+            .eq('id', data.user.id)
+            .single();
+          const meta = data.user.user_metadata ?? {};
+          setNickname(profile?.nickname ?? meta.nickname ?? '학생');
+          setSchoolName(profile?.school_name ?? meta.school_name ?? '');
+          setSchoolEmoji(profile?.school_emoji ?? meta.school_emoji ?? '🏫');
         }
         setLoading(false);
-      });
+      };
+      loadProfile();
     }, [])
   );
 

@@ -41,6 +41,17 @@ export default function ProfileSetupScreen() {
         meta.school_emoji = school.emoji;
       }
       await supabase.auth.updateUser({ data: meta });
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from('profiles').upsert({
+          id: user.id,
+          nickname: user.user_metadata?.nickname ?? null,
+          school_name: school?.name ?? null,
+          school_region: school?.region ?? null,
+          school_emoji: school?.emoji ?? '🏫',
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'id' });
+      }
     } catch {
       // 저장 실패해도 진행
     }

@@ -54,6 +54,7 @@ export default function CommunityScreen() {
   const [loadingPosts, setLoadingPosts] = useState(true);
   const [selectedTab, setSelectedTab] = useState('전체');
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   const [writeModal, setWriteModal] = useState(false);
   const [writeTab, setWriteTab] = useState('자유');
@@ -86,7 +87,22 @@ export default function CommunityScreen() {
     setLoadingPosts(false);
   };
 
+  const fetchLikedIds = async (uid: string) => {
+    const { data } = await supabase
+      .from('post_likes')
+      .select('post_id')
+      .eq('user_id', uid);
+    if (data) setLikedIds(new Set(data.map((r: any) => r.post_id)));
+  };
+
   useEffect(() => {
+    const init = async () => {
+      const { data } = await supabase.auth.getUser();
+      const uid = data?.user?.id ?? null;
+      setCurrentUserId(uid);
+      if (uid) fetchLikedIds(uid);
+    };
+    init();
     fetchPosts();
 
     // 실시간 새 게시글 구독
@@ -107,6 +123,15 @@ export default function CommunityScreen() {
     return data?.user ?? null;
   };
 
+  const getNickname = async (uid: string, fallback: string) => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('nickname')
+      .eq('id', uid)
+      .single();
+    return data?.nickname ?? fallback;
+  };
+
   const submitPost = async () => {
     if (!writeTitle.trim() || !writeBody.trim()) return;
     setPostError('');
@@ -114,12 +139,13 @@ export default function CommunityScreen() {
     try {
       const user = await getCurrentUser();
       const isAnon = writeTab === '익명';
+      const nickname = isAnon ? '익명' : (user ? await getNickname(user.id, user.user_metadata?.nickname ?? '학생') : '학생');
       const { error } = await supabase.from('posts').insert({
         tab: writeTab,
         title: writeTitle.trim(),
         body: writeBody.trim(),
         author_id: user?.id ?? null,
-        author_nickname: isAnon ? '익명' : (user?.user_metadata?.nickname ?? '학생'),
+        author_nickname: nickname,
         is_anonymous: isAnon,
       });
       if (error) {
@@ -139,14 +165,23 @@ export default function CommunityScreen() {
   };
 
   const toggleLike = async (post: Post) => {
+    if (!currentUserId) return;
     const isLiked = likedIds.has(post.id);
     const newLikes = isLiked ? post.likes - 1 : post.likes + 1;
+
+    // 낙관적 UI 업데이트
     setLikedIds(prev => {
       const next = new Set(prev);
       isLiked ? next.delete(post.id) : next.add(post.id);
       return next;
     });
     setPosts(prev => prev.map(p => p.id === post.id ? { ...p, likes: newLikes } : p));
+
+    if (isLiked) {
+      await supabase.from('post_likes').delete().eq('post_id', post.id).eq('user_id', currentUserId);
+    } else {
+      await supabase.from('post_likes').insert({ post_id: post.id, user_id: currentUserId });
+    }
     await supabase.from('posts').update({ likes: newLikes }).eq('id', post.id);
   };
 
@@ -167,10 +202,11 @@ export default function CommunityScreen() {
     if (!commentText.trim() || !commentPost) return;
     setSendingComment(true);
     const user = await getCurrentUser();
+    const nickname = user ? await getNickname(user.id, user.user_metadata?.nickname ?? '학생') : '학생';
     const { data, error } = await supabase.from('comments').insert({
       post_id: commentPost.id,
       author_id: user?.id ?? null,
-      author_nickname: user?.user_metadata?.nickname ?? '학생',
+      author_nickname: nickname,
       body: commentText.trim(),
     }).select().single();
     setSendingComment(false);

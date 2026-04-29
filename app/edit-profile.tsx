@@ -115,6 +115,17 @@ export default function EditProfileScreen() {
       if (error) {
         setErrorMsg('저장 중 오류가 발생했어요');
       } else {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await supabase.from('profiles').upsert({
+            id: user.id,
+            nickname: nickname.trim(),
+            school_name: selectedSchool?.name ?? null,
+            school_region: selectedSchool?.region ?? null,
+            school_emoji: selectedSchool?.emoji ?? '🏫',
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'id' });
+        }
         setSuccessMsg('저장됐어요!');
         setTimeout(() => router.back(), 1200);
       }
