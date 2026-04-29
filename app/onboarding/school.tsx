@@ -160,7 +160,7 @@ export default function SchoolScreen() {
               style={styles.nextBtn}
               onPress={async () => {
                 await AsyncStorage.setItem('selected_school', JSON.stringify(selected));
-                router.push('/onboarding/register');
+                router.replace('/onboarding');
               }}>
               <Text style={styles.nextBtnText}>다음 →</Text>
             </TouchableOpacity>

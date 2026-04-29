@@ -51,10 +51,10 @@ export default function HomeScreen() {
   const modelRef = useRef<GenerativeModel | null>(null);
 
   const loadUserSchool = useCallback(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      const uid = data?.user?.id ?? null;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const uid = session?.user?.id ?? null;
       setUserId(uid);
-      const meta = data?.user?.user_metadata ?? {};
+      const meta = session?.user?.user_metadata ?? {};
       const name = meta.school_name ?? '';
       const region = meta.school_region ?? '';
       setSchoolName(name);

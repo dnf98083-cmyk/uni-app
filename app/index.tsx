@@ -17,7 +17,7 @@ export default function SplashScreen() {
     ]).start();
 
     const timer = setTimeout(() => {
-      router.replace('/onboarding/school');
+      router.replace('/onboarding/register');
     }, 2500);
 
     return () => clearTimeout(timer);

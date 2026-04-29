@@ -48,7 +48,7 @@ export default function RegisterScreen() {
         setErrorMsg('이미 가입된 이메일이에요. 로그인해주세요');
       } else {
         setSuccessMsg(`${nickname}님, 환영해요! 🎉`);
-        setTimeout(() => router.replace('/onboarding'), 1500);
+        setTimeout(() => router.replace('/onboarding/school'), 1500);
       }
     } catch (e: any) {
       setErrorMsg(e?.message || '네트워크 오류가 발생했어요');

@@ -25,15 +25,15 @@ export default function ProfileScreen() {
     useCallback(() => {
       setLoading(true);
       const loadProfile = async () => {
-        const { data } = await supabase.auth.getUser();
-        if (data?.user) {
-          setEmail(data.user.email ?? '');
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          setEmail(session.user.email ?? '');
           const { data: profile } = await supabase
             .from('profiles')
             .select('nickname, school_name, school_emoji')
-            .eq('id', data.user.id)
+            .eq('id', session.user.id)
             .single();
-          const meta = data.user.user_metadata ?? {};
+          const meta = session.user.user_metadata ?? {};
           setNickname(profile?.nickname ?? meta.nickname ?? '학생');
           setSchoolName(profile?.school_name ?? meta.school_name ?? '');
           setSchoolEmoji(profile?.school_emoji ?? meta.school_emoji ?? '🏫');

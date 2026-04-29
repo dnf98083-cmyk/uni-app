@@ -504,7 +504,7 @@ function PlaceDetailSheet({
   const [hasMyReview, setHasMyReview] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
+    supabase.auth.getSession().then(({ data: { session } }) => setUserId(session?.user?.id ?? null));
   }, []);
 
   useEffect(() => {
@@ -916,8 +916,8 @@ export default function MapScreen() {
 
   // 마운트 시 프로필 학교로 자동 검색
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data }) => {
-      const meta = data?.user?.user_metadata ?? {};
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      const meta = session?.user?.user_metadata ?? {};
       const name = (meta.school_name ?? '').trim();
       if (!name) return;
       setSchoolQuery(name);

@@ -121,10 +121,11 @@ export default function TimetableScreen() {
   });
   const [replaceConfirm, setReplaceConfirm] = useState(false);
   const [pendingBase64, setPendingBase64] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data }) => {
-      const uid = data?.user?.id ?? null;
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      const uid = session?.user?.id ?? null;
       setUserId(uid);
       if (uid) {
         const { data: row } = await supabase
@@ -143,13 +144,23 @@ export default function TimetableScreen() {
     });
   }, []);
 
-  useEffect(() => {
-    if (!storageLoaded || !userId) return;
-    supabase.from('user_timetables').upsert(
+  const saving = saveStatus === 'saving';
+
+  const handleSave = async () => {
+    if (!userId || saving) return;
+    setSaveStatus('saving');
+    const { error } = await supabase.from('user_timetables').upsert(
       { user_id: userId, classes, updated_at: new Date().toISOString() },
       { onConflict: 'user_id' }
     );
-  }, [classes, storageLoaded, userId]);
+    if (error) {
+      setSaveStatus('error');
+      setTimeout(() => setSaveStatus('idle'), 2500);
+    } else {
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    }
+  };
 
   const [form, setForm] = useState({
     name: '', room: '', professor: '', day: 0,
@@ -294,6 +305,23 @@ export default function TimetableScreen() {
           <TouchableOpacity style={styles.addBtn} onPress={() => setAddModal(true)}>
             <Text style={styles.addBtnText}>+ 추가</Text>
           </TouchableOpacity>
+          {classes.length > 0 && (
+            <TouchableOpacity
+              style={[styles.saveBtn,
+                saveStatus === 'saved' && { backgroundColor: '#3eeea0' },
+                saveStatus === 'error' && { backgroundColor: '#ff6b6b' },
+                saving && { opacity: 0.6 },
+              ]}
+              onPress={handleSave}
+              disabled={saving}>
+              {saving
+                ? <ActivityIndicator color="#fff" size="small" />
+                : <Text style={styles.saveBtnText}>
+                    {saveStatus === 'saved' ? '저장됨 ✓' : saveStatus === 'error' ? '실패 ✕' : '저장'}
+                  </Text>
+              }
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -638,6 +666,8 @@ const styles = StyleSheet.create({
   photoBtnText: { fontSize: 12, fontWeight: '600' },
   addBtn: { backgroundColor: '#7c6fff', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 7 },
   addBtnText: { fontSize: 12, color: '#fff', fontWeight: '700' },
+  saveBtn: { backgroundColor: '#22c55e', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 7, minWidth: 52, alignItems: 'center', justifyContent: 'center' },
+  saveBtnText: { fontSize: 12, color: '#fff', fontWeight: '700' },
   analyzeError: { color: '#ff6b6b', fontSize: 12, textAlign: 'center', marginVertical: 6 },
 
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
