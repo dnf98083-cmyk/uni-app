@@ -30,6 +30,8 @@ export default function LoginScreen() {
   const [signupPassword, setSignupPassword] = useState('');
   const [signupPasswordConfirm, setSignupPasswordConfirm] = useState('');
 
+  const toEmail = (raw: string) => raw.includes('@') ? raw.trim() : `${raw.trim()}@uni.app`;
+
   const handleLogin = async () => {
     if (!loginEmail || !loginPassword) {
       setLoginError('이메일과 비밀번호를 입력해주세요.');
@@ -39,7 +41,7 @@ export default function LoginScreen() {
       setLoading(true);
       setLoginError('');
       const { error } = await supabase.auth.signInWithPassword({
-        email: loginEmail,
+        email: toEmail(loginEmail),
         password: loginPassword,
       });
       if (error) throw error;
@@ -98,14 +100,13 @@ export default function LoginScreen() {
             /* 로그인 폼 */
             <View style={styles.form}>
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>이메일</Text>
+                <Text style={styles.label}>이메일 또는 아이디</Text>
                 <TextInput
                   style={styles.input}
                   value={loginEmail}
                   onChangeText={setLoginEmail}
-                  placeholder="university@email.com"
+                  placeholder="이메일 또는 아이디 (예: dnf826)"
                   placeholderTextColor="#44445a"
-                  keyboardType="email-address"
                   autoCapitalize="none"
                   returnKeyType="next"
                 />
