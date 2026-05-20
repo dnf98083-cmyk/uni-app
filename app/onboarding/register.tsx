@@ -252,7 +252,7 @@ export default function RegisterScreen() {
           <Text style={styles.label}>이메일 또는 아이디</Text>
           <TextInput
             style={styles.input}
-            placeholder="이메일 또는 아이디 (예: dnf826)"
+            placeholder="이메일 또는 아이디"
             placeholderTextColor="#555"
             value={email}
             onChangeText={v => { setEmail(v); clearMessages(); }}

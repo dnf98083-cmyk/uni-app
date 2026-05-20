@@ -105,7 +105,7 @@ export default function LoginScreen() {
                   style={styles.input}
                   value={loginEmail}
                   onChangeText={setLoginEmail}
-                  placeholder="이메일 또는 아이디 (예: dnf826)"
+                  placeholder="이메일 또는 아이디"
                   placeholderTextColor="#44445a"
                   autoCapitalize="none"
                   returnKeyType="next"
