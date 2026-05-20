@@ -15,12 +15,12 @@ import { supabase } from '../../lib/supabase';
 type Post = {
   id: string;
   title: string;
-  content: string;
-  category: string;
+  body: string;
+  tab: string;
+  author_nickname: string;
+  is_anonymous: boolean;
+  likes: number;
   created_at: string;
-  like_count: number;
-  comment_count: number;
-  profiles: { nickname: string; email: string } | null;
 };
 
 export default function AdminPosts() {
@@ -32,19 +32,19 @@ export default function AdminPosts() {
 
   const loadPosts = async () => {
     setLoading(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('posts')
-      .select('id, title, content, category, created_at, like_count, comment_count, profiles(nickname, email)')
+      .select('id, title, body, tab, author_nickname, is_anonymous, likes, created_at')
       .order('created_at', { ascending: false })
       .limit(100);
-    setPosts((data as unknown as Post[]) ?? []);
+    if (!error) setPosts((data as Post[]) ?? []);
     setLoading(false);
   };
 
   const deletePost = (post: Post) => {
     Alert.alert(
       '게시글 삭제',
-      `"${post.title}" 게시글을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`,
+      `"${post.title}" 게시글을 삭제하시겠습니까?`,
       [
         { text: '취소', style: 'cancel' },
         {
@@ -61,7 +61,7 @@ export default function AdminPosts() {
   const filtered = searchQuery.trim()
     ? posts.filter(p =>
         p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.content.toLowerCase().includes(searchQuery.toLowerCase())
+        p.body.toLowerCase().includes(searchQuery.toLowerCase())
       )
     : posts;
 
@@ -94,23 +94,31 @@ export default function AdminPosts() {
         </View>
       ) : (
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          {filtered.map((post) => (
+          {filtered.length === 0 ? (
+            <View style={styles.center}>
+              <Text style={styles.emptyText}>게시글이 없어요</Text>
+            </View>
+          ) : filtered.map((post) => (
             <View key={post.id} style={styles.postCard}>
               <View style={styles.postTop}>
                 <View style={styles.catBadge}>
-                  <Text style={styles.catText}>{post.category}</Text>
+                  <Text style={styles.catText}>{post.tab}</Text>
                 </View>
+                {post.is_anonymous && (
+                  <View style={styles.anonBadge}>
+                    <Text style={styles.anonText}>익명</Text>
+                  </View>
+                )}
                 <Text style={styles.date}>{formatDate(post.created_at)}</Text>
               </View>
               <Text style={styles.postTitle} numberOfLines={1}>{post.title}</Text>
-              <Text style={styles.postContent} numberOfLines={2}>{post.content}</Text>
+              <Text style={styles.postContent} numberOfLines={2}>{post.body}</Text>
               <View style={styles.postFooter}>
                 <Text style={styles.author}>
-                  {post.profiles?.nickname || post.profiles?.email || '알 수 없음'}
+                  {post.is_anonymous ? '익명' : post.author_nickname}
                 </Text>
                 <View style={styles.metaRow}>
-                  <Text style={styles.metaText}>❤️ {post.like_count ?? 0}</Text>
-                  <Text style={styles.metaText}>💬 {post.comment_count ?? 0}</Text>
+                  <Text style={styles.metaText}>❤️ {post.likes ?? 0}</Text>
                   <TouchableOpacity style={styles.deleteBtn} onPress={() => deletePost(post)}>
                     <Text style={styles.deleteBtnText}>삭제</Text>
                   </TouchableOpacity>
@@ -135,7 +143,8 @@ const styles = StyleSheet.create({
   backText: { color: '#7c6fff', fontSize: 14 },
   title: { flex: 1, fontSize: 20, fontWeight: '900', color: '#eee' },
   count: { fontSize: 14, color: '#666' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 60 },
+  emptyText: { color: '#555', fontSize: 14 },
 
   searchBox: {
     flexDirection: 'row', alignItems: 'center',
@@ -159,6 +168,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8, paddingVertical: 3,
   },
   catText: { fontSize: 10, color: '#7c6fff', fontWeight: '700' },
+  anonBadge: {
+    backgroundColor: '#2a2a2a', borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 3,
+  },
+  anonText: { fontSize: 10, color: '#888', fontWeight: '700' },
   date: { fontSize: 11, color: '#555', marginLeft: 'auto' },
   postTitle: { fontSize: 14, fontWeight: '700', color: '#eee', marginBottom: 4 },
   postContent: { fontSize: 12, color: '#888', lineHeight: 18, marginBottom: 10 },
