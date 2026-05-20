@@ -66,7 +66,7 @@ export default function AdminDashboard() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)' as any)} style={styles.backBtn}>
           <Text style={styles.backText}>← 뒤로</Text>
         </TouchableOpacity>
         <Text style={styles.title}>관리자 대시보드</Text>
