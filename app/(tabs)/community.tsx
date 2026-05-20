@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/lib/ThemeContext';
+import { startOrOpenChat } from '@/lib/chat';
 
 const TABS = ['전체', '자유', '질문', '정보', '익명'];
 const TAB_EMOJIS: Record<string, string> = { 자유: '😊', 질문: '❓', 정보: 'ℹ️', 익명: '🕵️' };
@@ -59,6 +60,15 @@ export default function CommunityScreen() {
   const [selectedTab, setSelectedTab] = useState('전체');
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [myNickname, setMyNickname] = useState('');
+
+  // 작성자 프로필 모달
+  const [profileModal, setProfileModal] = useState(false);
+  const [profileUser, setProfileUser] = useState<{
+    id: string; nickname: string; school: string; isAnon: boolean;
+  } | null>(null);
+  const [friendStatus, setFriendStatus] = useState<'none' | 'pending_sent' | 'pending_received' | 'accepted'>('none');
+  const [profileLoading, setProfileLoading] = useState(false);
 
   const [writeModal, setWriteModal] = useState(false);
   const [writeTab, setWriteTab] = useState('자유');
@@ -126,7 +136,11 @@ export default function CommunityScreen() {
       const { data: { session } } = await supabase.auth.getSession();
       const uid = session?.user?.id ?? null;
       setCurrentUserId(uid);
-      if (uid) fetchLikedIds(uid);
+      if (uid) {
+        fetchLikedIds(uid);
+        const { data: profile } = await supabase.from('profiles').select('nickname').eq('id', uid).single();
+        setMyNickname(profile?.nickname ?? session?.user?.user_metadata?.nickname ?? '학생');
+      }
     };
     init();
     fetchPosts();
@@ -231,6 +245,57 @@ export default function CommunityScreen() {
     }
   };
 
+  // ── 프로필 모달 ──────────────────────────────────────────────
+  const openProfile = async (post: Post) => {
+    if (!currentUserId || !post.author_id || post.author_id === currentUserId) return;
+    const isAnon = isAnonPost(post);
+    setProfileLoading(true);
+    setFriendStatus('none');
+    setProfileUser({ id: post.author_id, nickname: isAnon ? '익명' : post.author_nickname, school: '', isAnon });
+    setProfileModal(true);
+    const { data: profile } = await supabase.from('profiles').select('nickname, school').eq('id', post.author_id).single();
+    if (profile) {
+      setProfileUser(prev => prev ? { ...prev, nickname: isAnon ? '익명' : (profile.nickname ?? prev.nickname), school: profile.school ?? '' } : prev);
+    }
+    if (!isAnon) {
+      const { data: fr } = await supabase.from('friends').select('status, requester_id')
+        .or(`and(requester_id.eq.${currentUserId},addressee_id.eq.${post.author_id}),and(requester_id.eq.${post.author_id},addressee_id.eq.${currentUserId})`)
+        .maybeSingle();
+      if (!fr) setFriendStatus('none');
+      else if (fr.status === 'accepted') setFriendStatus('accepted');
+      else if (fr.requester_id === currentUserId) setFriendStatus('pending_sent');
+      else setFriendStatus('pending_received');
+    }
+    setProfileLoading(false);
+  };
+
+  const sendFriendRequest = async () => {
+    if (!currentUserId || !profileUser) return;
+    await supabase.from('friends').insert({ requester_id: currentUserId, addressee_id: profileUser.id, status: 'pending' });
+    setFriendStatus('pending_sent');
+  };
+
+  const acceptFriendRequest = async () => {
+    if (!currentUserId || !profileUser) return;
+    await supabase.from('friends').update({ status: 'accepted' }).eq('requester_id', profileUser.id).eq('addressee_id', currentUserId);
+    setFriendStatus('accepted');
+  };
+
+  const cancelOrRemoveFriend = async () => {
+    if (!currentUserId || !profileUser) return;
+    await supabase.from('friends').delete()
+      .or(`and(requester_id.eq.${currentUserId},addressee_id.eq.${profileUser.id}),and(requester_id.eq.${profileUser.id},addressee_id.eq.${currentUserId})`);
+    setFriendStatus('none');
+  };
+
+  const chatWithProfileUser = async () => {
+    if (!currentUserId || !profileUser) return;
+    const myDisplayName = profileUser.isAnon ? '익명' : myNickname;
+    const partnerDisplayName = profileUser.isAnon ? '익명' : profileUser.nickname;
+    await startOrOpenChat(currentUserId, myDisplayName, profileUser.id, partnerDisplayName);
+    setProfileModal(false);
+  };
+
   const topComments = comments.filter(c => !c.parent_id);
   const getReplies = (id: string) => comments.filter(c => c.parent_id === id);
   const filtered = selectedTab === '전체' ? posts : posts.filter(p => p.tab === selectedTab);
@@ -279,13 +344,15 @@ export default function CommunityScreen() {
               style={[styles.postCard, { backgroundColor: colors.card, borderColor: colors.border }]}
               onPress={() => openDetail(post)} activeOpacity={0.8}>
               <View style={styles.postHeader}>
-                <View style={[styles.postEmojiBox, { backgroundColor: colors.bg, borderColor: colors.border }]}>
+                <TouchableOpacity
+                  style={[styles.postEmojiBox, { backgroundColor: colors.bg, borderColor: colors.border }]}
+                  onPress={(e) => { e.stopPropagation?.(); openProfile(post); }}>
                   <Text style={styles.postEmoji}>{TAB_EMOJIS[post.tab] ?? '📝'}</Text>
-                </View>
-                <View style={styles.postMeta}>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.postMeta} onPress={(e) => { e.stopPropagation?.(); openProfile(post); }}>
                   <Text style={[styles.postAuthor, { color: colors.text }]}>{post.author_nickname}</Text>
                   <Text style={[styles.postTime, { color: colors.subText }]}>{timeAgo(post.created_at)}</Text>
-                </View>
+                </TouchableOpacity>
                 <View style={[styles.postTabBadge, { backgroundColor: colors.accent + '18' }]}>
                   <Text style={[styles.postTabText, { color: colors.accent }]}>{post.tab}</Text>
                 </View>
@@ -330,15 +397,17 @@ export default function CommunityScreen() {
               <>
                 <View style={[styles.detailContent, { borderBottomColor: colors.border }]}>
                   <View style={styles.detailMeta}>
-                    <View style={[styles.postEmojiBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                    <TouchableOpacity
+                      style={[styles.postEmojiBox, { backgroundColor: colors.card, borderColor: colors.border }]}
+                      onPress={() => openProfile(detailPost)}>
                       <Text style={styles.postEmoji}>{TAB_EMOJIS[detailPost.tab] ?? '📝'}</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={{ flex: 1 }} onPress={() => openProfile(detailPost)}>
                       <Text style={[styles.postAuthor, { color: colors.text }]}>
                         {isAnonPost(detailPost) ? '익명1' : detailPost.author_nickname}
                       </Text>
                       <Text style={[styles.postTime, { color: colors.subText }]}>{timeAgo(detailPost.created_at)}</Text>
-                    </View>
+                    </TouchableOpacity>
                     <View style={[styles.postTabBadge, { backgroundColor: colors.accent + '18' }]}>
                       <Text style={[styles.postTabText, { color: colors.accent }]}>{detailPost.tab}</Text>
                     </View>
@@ -458,6 +527,75 @@ export default function CommunityScreen() {
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* 작성자 프로필 모달 */}
+      <Modal visible={profileModal} transparent animationType="fade" onRequestClose={() => setProfileModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { backgroundColor: colors.card }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>프로필</Text>
+              <TouchableOpacity onPress={() => setProfileModal(false)}>
+                <Text style={[styles.modalClose, { color: colors.subText }]}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {profileLoading ? (
+              <ActivityIndicator color="#7c6fff" style={{ marginVertical: 32 }} />
+            ) : profileUser ? (
+              <View style={{ alignItems: 'center', paddingVertical: 16, gap: 12 }}>
+                {/* 아바타 */}
+                <View style={styles.profileAvatar}>
+                  <Text style={styles.profileAvatarText}>
+                    {profileUser.isAnon ? '🕵️' : profileUser.nickname[0]?.toUpperCase()}
+                  </Text>
+                </View>
+                <Text style={[styles.profileNickname, { color: colors.text }]}>
+                  {profileUser.isAnon ? '익명 사용자' : profileUser.nickname}
+                </Text>
+                {!profileUser.isAnon && profileUser.school ? (
+                  <Text style={[styles.profileSchool, { color: colors.subText }]}>🏫 {profileUser.school}</Text>
+                ) : null}
+
+                {/* 버튼들 */}
+                <View style={styles.profileBtns}>
+                  {/* 항상: 채팅하기 */}
+                  <TouchableOpacity style={styles.profileChatBtn} onPress={chatWithProfileUser}>
+                    <Text style={styles.profileChatBtnText}>
+                      {profileUser.isAnon ? '익명으로 채팅' : '✉️ 채팅하기'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* 실명일 때: 친구 관계 버튼 */}
+                  {!profileUser.isAnon && (
+                    <>
+                      {friendStatus === 'none' && (
+                        <TouchableOpacity style={styles.profileFriendBtn} onPress={sendFriendRequest}>
+                          <Text style={styles.profileFriendBtnText}>친구 추가</Text>
+                        </TouchableOpacity>
+                      )}
+                      {friendStatus === 'pending_sent' && (
+                        <TouchableOpacity style={[styles.profileFriendBtn, { borderColor: '#666' }]} onPress={cancelOrRemoveFriend}>
+                          <Text style={[styles.profileFriendBtnText, { color: '#888' }]}>요청 취소</Text>
+                        </TouchableOpacity>
+                      )}
+                      {friendStatus === 'pending_received' && (
+                        <TouchableOpacity style={[styles.profileFriendBtn, { backgroundColor: '#7c6fff', borderColor: '#7c6fff' }]} onPress={acceptFriendRequest}>
+                          <Text style={[styles.profileFriendBtnText, { color: '#fff' }]}>친구 수락</Text>
+                        </TouchableOpacity>
+                      )}
+                      {friendStatus === 'accepted' && (
+                        <TouchableOpacity style={[styles.profileFriendBtn, { borderColor: '#3eeea0' }]} onPress={cancelOrRemoveFriend}>
+                          <Text style={[styles.profileFriendBtnText, { color: '#3eeea0' }]}>✓ 친구</Text>
+                        </TouchableOpacity>
+                      )}
+                    </>
+                  )}
+                </View>
+              </View>
+            ) : null}
+          </View>
+        </View>
       </Modal>
 
       {/* 글쓰기 모달 */}
@@ -629,4 +767,24 @@ const styles = StyleSheet.create({
   submitBtnDisabled: { backgroundColor: '#2a2a40' },
   submitBtnText: { fontSize: 15, fontWeight: '800', color: '#fff' },
   postErrorText: { fontSize: 12, color: '#ff6b6b', marginBottom: 8, textAlign: 'center' },
+
+  profileAvatar: {
+    width: 72, height: 72, borderRadius: 36,
+    backgroundColor: '#7c6fff33', justifyContent: 'center', alignItems: 'center',
+    borderWidth: 2, borderColor: '#7c6fff',
+  },
+  profileAvatarText: { fontSize: 28, fontWeight: '900', color: '#7c6fff' },
+  profileNickname: { fontSize: 18, fontWeight: '800' },
+  profileSchool: { fontSize: 13 },
+  profileBtns: { flexDirection: 'row', gap: 10, marginTop: 8, flexWrap: 'wrap', justifyContent: 'center' },
+  profileChatBtn: {
+    backgroundColor: '#7c6fff', borderRadius: 14,
+    paddingHorizontal: 20, paddingVertical: 11,
+  },
+  profileChatBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  profileFriendBtn: {
+    borderRadius: 14, borderWidth: 1.5, borderColor: '#7c6fff',
+    paddingHorizontal: 20, paddingVertical: 11,
+  },
+  profileFriendBtnText: { color: '#7c6fff', fontSize: 14, fontWeight: '700' },
 });

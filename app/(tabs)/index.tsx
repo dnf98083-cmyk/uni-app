@@ -172,6 +172,18 @@ export default function HomeScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={0}>
 
+      {/* 검색바 */}
+      <TouchableOpacity
+        style={[styles.searchBar, { backgroundColor: colors.card, borderColor: colors.border }]}
+        onPress={() => router.push('/(tabs)/search' as any)}
+        activeOpacity={0.8}>
+        <Text style={styles.searchBarIcon}>🔍</Text>
+        <Text style={[styles.searchBarText, { color: colors.subText }]}>커뮤니티 AI 검색...</Text>
+        <View style={styles.searchBarBadge}>
+          <Text style={styles.searchBarBadgeText}>AI</Text>
+        </View>
+      </TouchableOpacity>
+
       {/* 상단 바 */}
       <View style={[styles.weatherBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={styles.weatherIcon}>🌤️</Text>
@@ -261,6 +273,20 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  searchBar: {
+    flexDirection: 'row', alignItems: 'center',
+    marginHorizontal: 14, marginTop: 10, marginBottom: 6,
+    borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12,
+    borderWidth: 1, gap: 10,
+  },
+  searchBarIcon: { fontSize: 15 },
+  searchBarText: { flex: 1, fontSize: 13 },
+  searchBarBadge: {
+    backgroundColor: '#7c6fff22', borderRadius: 8,
+    paddingHorizontal: 7, paddingVertical: 3,
+    borderWidth: 1, borderColor: '#7c6fff',
+  },
+  searchBarBadgeText: { fontSize: 10, color: '#7c6fff', fontWeight: '800' },
   weatherBar: {
     flexDirection: 'row', alignItems: 'center',
     marginHorizontal: 14, marginTop: 10,

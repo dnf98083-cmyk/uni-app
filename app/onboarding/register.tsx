@@ -25,6 +25,8 @@ export default function RegisterScreen() {
 
   const clearMessages = () => { setErrorMsg(''); setSuccessMsg(''); };
 
+  const toEmail = (raw: string) => raw.includes('@') ? raw : `${raw}@uni.app`;
+
   const handleRegister = async () => {
     clearMessages();
     if (!email || !password || !nickname) {
@@ -32,9 +34,10 @@ export default function RegisterScreen() {
       return;
     }
     setLoading(true);
+    const resolvedEmail = toEmail(email.trim());
     try {
       const { data, error } = await supabase.auth.signUp({
-        email, password,
+        email: resolvedEmail, password,
         options: { data: { nickname } },
       });
       if (error) {
@@ -65,8 +68,9 @@ export default function RegisterScreen() {
       return;
     }
     setLoading(true);
+    const resolvedEmail = toEmail(email.trim());
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabase.auth.signInWithPassword({ email: resolvedEmail, password });
       if (error) {
         setErrorMsg(
           error.message.includes('Invalid login credentials') ? '이메일 또는 비밀번호가 틀렸어요'
@@ -245,14 +249,13 @@ export default function RegisterScreen() {
           </View>
         )}
         <View style={styles.inputWrap}>
-          <Text style={styles.label}>이메일</Text>
+          <Text style={styles.label}>이메일 또는 아이디</Text>
           <TextInput
             style={styles.input}
-            placeholder="이메일 주소 입력"
+            placeholder="이메일 또는 아이디 (예: dnf826)"
             placeholderTextColor="#555"
             value={email}
             onChangeText={v => { setEmail(v); clearMessages(); }}
-            keyboardType="email-address"
             autoCapitalize="none"
           />
         </View>

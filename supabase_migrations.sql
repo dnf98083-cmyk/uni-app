@@ -122,7 +122,40 @@ create policy "embeddings_update" on post_embeddings
 -- Supabase 대시보드 > Database > Replication 에서
 -- chat_messages, chat_rooms 테이블 활성화 필요
 
+-- ── 10. 친구 테이블 ─────────────────────────────────────────────
+create table if not exists friends (
+  id uuid primary key default gen_random_uuid(),
+  requester_id uuid references auth.users(id) on delete cascade not null,
+  addressee_id uuid references auth.users(id) on delete cascade not null,
+  status text not null default 'pending', -- 'pending' | 'accepted'
+  created_at timestamptz default now(),
+  constraint no_self_friend check (requester_id <> addressee_id),
+  constraint unique_friendship unique (requester_id, addressee_id)
+);
+
+alter table friends enable row level security;
+
+drop policy if exists "friends_select" on friends;
+create policy "friends_select" on friends
+  for select using (auth.uid() = requester_id or auth.uid() = addressee_id);
+
+drop policy if exists "friends_insert" on friends;
+create policy "friends_insert" on friends
+  for insert with check (auth.uid() = requester_id);
+
+drop policy if exists "friends_update" on friends;
+create policy "friends_update" on friends
+  for update using (auth.uid() = requester_id or auth.uid() = addressee_id);
+
+drop policy if exists "friends_delete" on friends;
+create policy "friends_delete" on friends
+  for delete using (auth.uid() = requester_id or auth.uid() = addressee_id);
+
 -- ── 완료 ────────────────────────────────────────────────────────
--- 위 SQL 실행 후 관리자 계정 설정:
+-- ※ 앱에서 아이디 'dnf826', 비밀번호 '0000' 으로 회원가입 후 아래 SQL 실행:
+-- update profiles set is_admin = true
+-- where id = (select id from auth.users where email = 'dnf826@uni.app');
+--
+-- ※ 일반 이메일로 가입한 경우:
 -- update profiles set is_admin = true
 -- where id = (select id from auth.users where email = '본인이메일@example.com');
