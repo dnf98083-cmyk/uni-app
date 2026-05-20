@@ -19,6 +19,8 @@ export default function RootLayout() {
         <Stack.Screen name="settings" options={{ headerShown: false }} />
         <Stack.Screen name="edit-profile" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+        <Stack.Screen name="admin" options={{ headerShown: false }} />
+        <Stack.Screen name="chat/[roomId]" options={{ headerShown: false }} />
       </Stack>
       <StatusBar style="auto" />
     </AppThemeProvider>

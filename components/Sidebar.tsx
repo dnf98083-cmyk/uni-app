@@ -27,13 +27,24 @@ export default function Sidebar({ visible, onClose }: SidebarProps) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const [nickname, setNickname] = useState('');
   const [email, setEmail] = useState('');
+  const [school, setSchool] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getUser().then(async ({ data }) => {
       if (data?.user) {
         setNickname(data.user.user_metadata?.nickname ?? '학생');
         setEmail(data.user.email ?? '');
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('school, is_admin')
+          .eq('id', data.user.id)
+          .single();
+        if (profile) {
+          setSchool(profile.school ?? '');
+          setIsAdmin(profile.is_admin ?? false);
+        }
       }
     });
   }, []);
@@ -99,9 +110,30 @@ export default function Sidebar({ visible, onClose }: SidebarProps) {
             </View>
             <Text style={[styles.userName, { color: colors.text }]}>{nickname || '...'}</Text>
             <Text style={[styles.userEmail, { color: colors.subText }]}>{email || '...'}</Text>
-            <View style={[styles.schoolBadge, { backgroundColor: colors.accent + '1a' }]}>
-              <Text style={[styles.schoolBadgeText, { color: colors.accent }]}>🏫 신구대학교</Text>
-            </View>
+            {school ? (
+              <View style={[styles.schoolBadge, { backgroundColor: colors.accent + '1a' }]}>
+                <Text style={[styles.schoolBadgeText, { color: colors.accent }]}>🏫 {school}</Text>
+              </View>
+            ) : null}
+          </View>
+
+          {/* 빠른 이동 */}
+          <View style={[styles.section, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.sectionLabel, { color: colors.subText }]}>빠른 이동</Text>
+            <TouchableOpacity style={styles.navItem} onPress={() => { onClose(); router.push('/(tabs)/chat' as any); }}>
+              <Text style={styles.navIcon}>✉️</Text>
+              <Text style={[styles.navText, { color: colors.text }]}>채팅</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.navItem} onPress={() => { onClose(); router.push('/(tabs)/search' as any); }}>
+              <Text style={styles.navIcon}>🔍</Text>
+              <Text style={[styles.navText, { color: colors.text }]}>AI 검색</Text>
+            </TouchableOpacity>
+            {isAdmin && (
+              <TouchableOpacity style={styles.navItem} onPress={() => { onClose(); router.push('/admin' as any); }}>
+                <Text style={styles.navIcon}>⚙️</Text>
+                <Text style={[styles.navText, { color: '#7c6fff' }]}>관리자 페이지</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* 테마 선택 */}
@@ -208,6 +240,9 @@ const styles = StyleSheet.create({
     alignItems: 'center', gap: 4,
   },
   themeBtnLabel: { fontSize: 12, fontWeight: '700' },
+  navItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9 },
+  navIcon: { fontSize: 16, width: 24 },
+  navText: { fontSize: 14, fontWeight: '600' },
   version: { fontSize: 11, textAlign: 'center', marginBottom: 12 },
   logoutBtn: {
     borderWidth: 1, borderRadius: 14,

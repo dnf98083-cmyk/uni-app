@@ -31,6 +31,7 @@ const TAB_PATHS = [
   '/(tabs)/community',
   '/(tabs)',
   '/(tabs)/map',
+  '/(tabs)/chat',
   '/(tabs)/profile',
 ] as const;
 
@@ -38,7 +39,8 @@ function getTabIndex(pathname: string) {
   if (pathname.includes('timetable')) return 0;
   if (pathname.includes('community')) return 1;
   if (pathname.includes('map')) return 3;
-  if (pathname.includes('profile')) return 4;
+  if (pathname.includes('chat')) return 4;
+  if (pathname.includes('profile')) return 5;
   return 2;
 }
 
@@ -57,9 +59,9 @@ export default function TabLayout() {
     onPanResponderRelease: (_, gs) => {
       const idx = currentIndexRef.current;
       if (gs.dx < -60 && idx < TAB_PATHS.length - 1) {
-        router.navigate(TAB_PATHS[idx + 1]);
+        router.navigate(TAB_PATHS[idx + 1] as any);
       } else if (gs.dx > 60 && idx > 0) {
-        router.navigate(TAB_PATHS[idx - 1]);
+        router.navigate(TAB_PATHS[idx - 1] as any);
       }
     },
   })).current;
@@ -109,6 +111,10 @@ export default function TabLayout() {
         <Tabs.Screen name="map" options={{
           title: '맛집',
           tabBarIcon: ({ focused }) => <TabIcon emoji="🗺️" focused={focused} />,
+        }} />
+        <Tabs.Screen name="chat" options={{
+          title: '채팅',
+          tabBarIcon: ({ focused }) => <TabIcon emoji="✉️" focused={focused} />,
         }} />
         <Tabs.Screen name="profile" options={{
           title: '프로필',
