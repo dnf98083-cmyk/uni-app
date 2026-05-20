@@ -152,7 +152,7 @@ create policy "friends_delete" on friends
   for delete using (auth.uid() = requester_id or auth.uid() = addressee_id);
 
 -- ── 완료 ────────────────────────────────────────────────────────
--- ※ 앱에서 아이디 'dnf826', 비밀번호 '0000' 으로 회원가입 후 아래 SQL 실행:
+-- ※ 앱에서 아이디 'dnf826', 비밀번호 '000000' 으로 회원가입 후 아래 SQL 실행:
 -- update profiles set is_admin = true
 -- where id = (select id from auth.users where email = 'dnf826@uni.app');
 --
