@@ -914,8 +914,9 @@ export default function MapScreen() {
     `);
   }, []);
 
-  // 마운트 시 프로필 학교로 자동 검색
+  // 마운트 시 프로필 학교로 자동 검색 (AI 카테고리 파라미터가 없을 때만)
   useEffect(() => {
+    if (category) return; // category effect가 대신 처리
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       const meta = session?.user?.user_metadata ?? {};
       const name = (meta.school_name ?? '').trim();
@@ -976,8 +977,9 @@ export default function MapScreen() {
     setLoading(true);
     setError('');
     try {
+      let kakaoFailed = false;
       const [kakaoResults, registeredResults] = await Promise.all([
-        fetchPlaces(lat, lng, cat, school).catch(() => [] as Place[]),
+        fetchPlaces(lat, lng, cat, school).catch(() => { kakaoFailed = true; return [] as Place[]; }),
         fetchRegisteredRestaurants(school),
       ]);
       const filteredReg = cat.label === '전체'
@@ -986,7 +988,9 @@ export default function MapScreen() {
       const results = [...filteredReg, ...kakaoResults];
       setPlaces(results);
       if (mapReady) postToMap({ type: 'markers', places: results });
-      if (results.length === 0) setError('해당 카테고리 결과가 없어요');
+      if (results.length === 0) {
+        setError(kakaoFailed ? '장소 검색 중 오류가 발생했어요. 잠시 후 다시 시도해보세요.' : '해당 카테고리 결과가 없어요');
+      }
     } catch (e: any) {
       setError(e.message || '장소 검색 중 오류가 발생했어요');
     } finally {

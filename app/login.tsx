@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -23,6 +23,7 @@ export default function LoginScreen() {
   // 로그인 폼 상태
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const passwordRef = useRef<TextInput>(null);
 
   // 회원가입 폼 상태
   const [signupName, setSignupName] = useState('');
@@ -116,12 +117,14 @@ export default function LoginScreen() {
                   placeholderTextColor="#44445a"
                   autoCapitalize="none"
                   returnKeyType="next"
+                  onSubmitEditing={() => passwordRef.current?.focus()}
                 />
               </View>
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>비밀번호</Text>
                 <TextInput
+                  ref={passwordRef}
                   style={styles.input}
                   value={loginPassword}
                   onChangeText={setLoginPassword}

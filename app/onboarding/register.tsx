@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
@@ -18,6 +18,8 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [nickname, setNickname] = useState('');
+  const emailRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
   const [otpCode, setOtpCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -252,29 +254,37 @@ export default function RegisterScreen() {
               placeholderTextColor="#555"
               value={nickname}
               onChangeText={v => { setNickname(v); clearMessages(); }}
+              returnKeyType="next"
+              onSubmitEditing={() => emailRef.current?.focus()}
             />
           </View>
         )}
         <View style={styles.inputWrap}>
           <Text style={styles.label}>이메일 또는 아이디</Text>
           <TextInput
+            ref={emailRef}
             style={styles.input}
             placeholder="이메일 또는 아이디"
             placeholderTextColor="#555"
             value={email}
             onChangeText={v => { setEmail(v); clearMessages(); }}
             autoCapitalize="none"
+            returnKeyType="next"
+            onSubmitEditing={() => passwordRef.current?.focus()}
           />
         </View>
         <View style={styles.inputWrap}>
           <Text style={styles.label}>비밀번호</Text>
           <TextInput
+            ref={passwordRef}
             style={styles.input}
             placeholder="비밀번호 입력 (6자 이상)"
             placeholderTextColor="#555"
             value={password}
             onChangeText={v => { setPassword(v); clearMessages(); }}
             secureTextEntry
+            returnKeyType="done"
+            onSubmitEditing={mode === 'register' ? handleRegister : handleLogin}
           />
         </View>
       </View>
