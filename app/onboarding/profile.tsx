@@ -46,9 +46,7 @@ export default function ProfileSetupScreen() {
         await supabase.from('profiles').upsert({
           id: user.id,
           nickname: user.user_metadata?.nickname ?? null,
-          school_name: school?.name ?? null,
-          school_region: school?.region ?? null,
-          school_emoji: school?.emoji ?? '🏫',
+          school: school?.name ?? null,
           updated_at: new Date().toISOString(),
         }, { onConflict: 'id' });
       }
