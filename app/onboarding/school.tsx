@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
+import { supabase } from '@/lib/supabase';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -160,7 +161,11 @@ export default function SchoolScreen() {
               style={styles.nextBtn}
               onPress={async () => {
                 await AsyncStorage.setItem('selected_school', JSON.stringify(selected));
-                router.replace('/onboarding');
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user) {
+                  await supabase.from('profiles').update({ school: selected.name }).eq('id', user.id);
+                }
+                router.back();
               }}>
               <Text style={styles.nextBtnText}>다음 →</Text>
             </TouchableOpacity>

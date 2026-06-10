@@ -1,9 +1,10 @@
 import { router, Tabs, usePathname } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { PanResponder, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Sidebar from '@/components/Sidebar';
 import { useTheme } from '@/lib/ThemeContext';
+import { supabase } from '@/lib/supabase';
 
 function TabIcon({ emoji, focused }: { emoji: string; focused: boolean }) {
   return <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.5 }}>{emoji}</Text>;
@@ -48,7 +49,21 @@ export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [schoolPopup, setSchoolPopup] = useState(false);
   const pathname = usePathname();
+
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase
+        .from('profiles')
+        .select('school')
+        .eq('id', user.id)
+        .single();
+      if (!data?.school) setSchoolPopup(true);
+    })();
+  }, []);
 
   const currentIndexRef = useRef(2);
   currentIndexRef.current = getTabIndex(pathname);
@@ -125,6 +140,24 @@ export default function TabLayout() {
       </Tabs>
 
       <Sidebar visible={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+
+      {schoolPopup && (
+        <View style={styles.popupOverlay}>
+          <View style={styles.popup}>
+            <Text style={styles.popupEmoji}>🏫</Text>
+            <Text style={styles.popupTitle}>학교를 등록해주세요</Text>
+            <Text style={styles.popupDesc}>학교 정보를 등록하면{'\n'}커뮤니티 맞춤 서비스를 이용할 수 있어요</Text>
+            <TouchableOpacity
+              style={styles.popupBtn}
+              onPress={() => { setSchoolPopup(false); router.push('/onboarding/school' as any); }}>
+              <Text style={styles.popupBtnText}>학교 등록하기</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setSchoolPopup(false)}>
+              <Text style={styles.popupSkip}>나중에 할게요</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -144,4 +177,28 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   menuIcon: { fontSize: 20, fontWeight: '600' },
+
+  popupOverlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center', alignItems: 'center',
+    zIndex: 999,
+  },
+  popup: {
+    backgroundColor: '#13131a', borderRadius: 24,
+    borderWidth: 1, borderColor: '#2a2a40',
+    padding: 28, marginHorizontal: 32,
+    alignItems: 'center', gap: 8,
+  },
+  popupEmoji: { fontSize: 48, marginBottom: 4 },
+  popupTitle: { fontSize: 20, fontWeight: '900', color: '#eee', textAlign: 'center' },
+  popupDesc: { fontSize: 14, color: '#888', textAlign: 'center', lineHeight: 22, marginBottom: 8 },
+  popupBtn: {
+    backgroundColor: '#7c6fff', borderRadius: 14,
+    paddingVertical: 14, paddingHorizontal: 32,
+    width: '100%', alignItems: 'center',
+    marginTop: 4,
+  },
+  popupBtnText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  popupSkip: { color: '#555', fontSize: 13, marginTop: 8 },
 });
