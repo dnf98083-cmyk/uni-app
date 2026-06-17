@@ -51,7 +51,7 @@ export function buildSystemPrompt(schoolName: string, schoolRegion: string): str
 
 export function createGeminiModel(schoolName: string, schoolRegion: string) {
   return genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash-lite',
+    model: 'gemini-1.5-flash',
     systemInstruction: buildSystemPrompt(schoolName, schoolRegion),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     tools: [{ googleSearch: {} } as any],
@@ -62,5 +62,5 @@ export function createGeminiModel(schoolName: string, schoolRegion: string) {
 export const geminiModel = createGeminiModel('대학교', '');
 
 export const geminiVision = genAI.getGenerativeModel({
-  model: 'gemini-2.0-flash-lite',
+  model: 'gemini-1.5-flash',
 });
