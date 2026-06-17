@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useFocusEffect } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   ActivityIndicator,
   Linking,
@@ -793,61 +794,65 @@ export default function MapScreen() {
   // places 최신값을 ref에 유지 (웹 메시지 핸들러 stale closure 방지)
   useEffect(() => { placesRef.current = places; }, [places]);
 
-  // AI에서 카테고리/쿼리 파라미터로 넘어온 경우 자동 검색
-  useEffect(() => {
-    if (!category) return;
-    const found = CATEGORIES.find(c => c.label === category) ?? CATEGORIES[0];
-    setSelectedCat(found);
+  // AI 지도보기 버튼 → AsyncStorage에서 검색어 읽어서 자동 검색
+  useFocusEffect(
+    useCallback(() => {
+      AsyncStorage.getItem('map_ai_query').then(async (val) => {
+        if (!val) return;
+        await AsyncStorage.removeItem('map_ai_query');
+        const { restaurantName, category: cat } = JSON.parse(val);
+        const found = CATEGORIES.find(c => c.label === cat) ?? CATEGORIES[0];
+        setSelectedCat(found);
+        setPlaces([]);
+        setSheetVisible(false);
 
-    supabase.auth.getUser().then(async ({ data }) => {
-      const meta = data?.user?.user_metadata ?? {};
-      const name = (meta.school_name ?? meta.schoolName ?? '').trim();
-      if (!name) return;
-      setSchoolQuery(name);
-      setPlaces([]);
-      setSheetVisible(false);
-      try {
-        const loc = await searchSchoolLocation(name);
-        setLocation(loc);
-        if (mapReady) postToMap({ type: 'center', lat: loc.lat, lng: loc.lng });
+        const { data } = await supabase.auth.getUser();
+        const meta = data?.user?.user_metadata ?? {};
+        const name = (meta.school_name ?? meta.schoolName ?? '').trim();
+        if (!name) return;
+        setSchoolQuery(name);
 
-        if (aiQuery && aiQuery.trim()) {
-          // 특정 식당 이름으로 바로 검색
-          setNameQuery(aiQuery.trim());
-          setLoading(true);
-          setError('');
-          try {
-            const h = kakaoHeaders();
-            const q = `${name} ${aiQuery.trim()}`;
-            const locPart = `&x=${loc.lng}&y=${loc.lat}&radius=3000`;
-            const res = await fetch(
-              `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(q)}${locPart}&size=20`,
-              { headers: h }
-            );
-            const resData = await res.json();
-            const results = mapDocs(resData.documents ?? [], '');
-            setPlaces(results);
-            if (results.length > 0) {
-              postToMap({ type: 'markers', places: results });
-              postToMap({ type: 'center', lat: results[0].lat, lng: results[0].lng });
-            } else {
-              setNameQuery('');
+        try {
+          const loc = await searchSchoolLocation(name);
+          setLocation(loc);
+
+          if (restaurantName) {
+            setNameQuery(restaurantName);
+            setLoading(true);
+            setError('');
+            try {
+              const h = kakaoHeaders();
+              const q = `${name} ${restaurantName}`;
+              const locPart = `&x=${loc.lng}&y=${loc.lat}&radius=3000`;
+              const res = await fetch(
+                `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(q)}${locPart}&size=20`,
+                { headers: h }
+              );
+              const resData = await res.json();
+              const results = mapDocs(resData.documents ?? [], '');
+              if (results.length > 0) {
+                setPlaces(results);
+                postToMap({ type: 'markers', places: results });
+                postToMap({ type: 'center', lat: results[0].lat, lng: results[0].lng });
+              } else {
+                setNameQuery('');
+                await loadPlaces(loc.lat, loc.lng, found, name);
+              }
+            } catch {
               await loadPlaces(loc.lat, loc.lng, found, name);
+            } finally {
+              setLoading(false);
             }
-          } catch {
+          } else {
             await loadPlaces(loc.lat, loc.lng, found, name);
-          } finally {
-            setLoading(false);
           }
-        } else {
-          await loadPlaces(loc.lat, loc.lng, found, name);
+        } catch {
+          setError('학교 위치를 찾지 못했어요.');
         }
-      } catch {
-        setError('학교 위치를 찾지 못했어요. 위 검색창에서 학교 이름을 직접 입력해보세요!');
-      }
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [category, aiQuery, aiTimestamp]);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+  );
 
   const postToMap = useCallback((msg: object) => {
     if (Platform.OS === 'web') {
