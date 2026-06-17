@@ -120,7 +120,7 @@ const searchSchoolWeb = async (query: string) => {
 // ── Kakao API ────────────────────────────────────────────────
 const kakaoHeaders = () => ({ Authorization: `KakaoAK ${process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY ?? ''}` });
 
-const kakaoSearch = async (query: string, lat?: number, lng?: number, size = 20): Promise<any> => {
+const kakaoSearch = async (query: string, lat?: number, lng?: number, size = 15): Promise<any> => {
   if (Platform.OS === 'web') {
     const params = new URLSearchParams({ query, size: String(size) });
     if (lat && lng) { params.set('x', String(lng)); params.set('y', String(lat)); params.set('radius', '3000'); }
@@ -768,7 +768,7 @@ function RegisterModal({
 // ── 화면 ────────────────────────────────────────────────────
 export default function MapScreen() {
   const { colors } = useTheme();
-  const { category, query: aiQuery, t: aiTimestamp } = useLocalSearchParams<{ category?: string; query?: string; t?: string }>();
+  const { category } = useLocalSearchParams<{ category?: string }>();
   const webViewRef = useRef<WebView>(null);
   const iframeRef = useRef<any>(null);
   const placesRef = useRef<Place[]>([]);
