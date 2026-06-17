@@ -40,14 +40,18 @@ function detectMapCategory(text: string): string | null {
 }
 
 function extractFirstRestaurantName(text: string): string | null {
-  // **이름** 패턴 — 콜론·따옴표·슬래시 없는 순수 이름만, 2~12자
-  const boldMatches = [...text.matchAll(/\*\*([^*\n]{2,12})\*\*/g)];
+  const boldMatches = [...text.matchAll(/\*\*([^*\n]+?)\*\*/g)];
   for (const m of boldMatches) {
-    const name = m[1].trim();
-    if (!name.endsWith(':') && !name.endsWith('쪽') && !/['"\/]/.test(name)) return name;
+    const raw = m[1].trim();
+    if (raw.endsWith(':') || raw.endsWith('쪽') || raw.endsWith('**')) continue;
+    if (['메뉴', '위치', '특징', '분위기', '위치/특징'].some(k => raw.startsWith(k))) continue;
+    // 따옴표 안에 있는 이름 우선 추출 ('멘텐' → 멘텐)
+    const quoted = raw.match(/['''"]([^'''"\s]{1,15})['''"]/);
+    if (quoted) return quoted[1].trim();
+    // 15자 이내 순수 이름
+    if (raw.length >= 2 && raw.length <= 15) return raw;
   }
-  // "1. 이름" 패턴
-  const listMatch = text.match(/^\d+[\.\)]\s*([^\n\-:：'"\/]{2,12})/m);
+  const listMatch = text.match(/^\d+[\.\)]\s*([^\n\-:：'''"/]{2,12})/m);
   if (listMatch) return listMatch[1].trim();
   return null;
 }
