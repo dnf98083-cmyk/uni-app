@@ -81,10 +81,8 @@ export default function AdminUsers() {
     if (user.id === myId) { setActionError('본인 계정은 삭제할 수 없습니다.'); return; }
     setLoadingId(user.id);
     setActionError('');
-    const { error, count } = await supabase
-      .from('profiles').delete({ count: 'exact' }).eq('id', user.id);
+    const { error } = await supabase.rpc('delete_user_as_admin', { target_user_id: user.id });
     if (error) setActionError('삭제 실패: ' + error.message);
-    else if (count === 0) setActionError('권한 없음 — ' + RLS_MSG);
     else setUsers(prev => prev.filter(u => u.id !== user.id));
     setLoadingId(null);
   };
