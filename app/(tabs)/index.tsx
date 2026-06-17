@@ -18,7 +18,7 @@ import {
   View,
 } from 'react-native';
 
-type Message = { role: 'user' | 'ai'; text: string; mapCategory?: string };
+type Message = { role: 'user' | 'ai'; text: string; mapCategory?: string; restaurantQuery?: string };
 
 const MAP_KEYWORDS: { keywords: string[]; category: string }[] = [
   { keywords: ['한식', '한국음식', '국밥', '찌개', '비빔밥', '설렁탕'], category: '한식' },
@@ -36,6 +36,16 @@ function detectMapCategory(text: string): string | null {
   for (const { keywords, category } of MAP_KEYWORDS) {
     if (keywords.some(k => lower.includes(k.replace(/\s+/g, '')))) return category;
   }
+  return null;
+}
+
+function extractFirstRestaurantName(text: string): string | null {
+  // **굵은글씨** 패턴 (마크다운 bold)
+  const boldMatch = text.match(/\*\*([^*\n]{2,20})\*\*/);
+  if (boldMatch) return boldMatch[1].trim();
+  // "1. 식당이름" 또는 "- 식당이름" 패턴
+  const listMatch = text.match(/^[\d\-\*]+[\.\)]\s*([^\n\-:：]{2,20})/m);
+  if (listMatch) return listMatch[1].trim();
   return null;
 }
 
@@ -150,7 +160,8 @@ export default function HomeScreen() {
       const result = await getChat().sendMessage(prompt);
       const reply = result.response.text();
       const mapCategory = detectMapCategory(text) ?? detectMapCategory(reply) ?? undefined;
-      setMessages(prev => [...prev, { role: 'ai', text: reply, mapCategory }]);
+      const restaurantQuery = mapCategory ? (extractFirstRestaurantName(reply) ?? undefined) : undefined;
+      setMessages(prev => [...prev, { role: 'ai', text: reply, mapCategory, restaurantQuery }]);
     } catch (e: any) {
       const msg = e?.message?.includes('API_KEY') ? 'API 키가 올바르지 않아요.' :
         e?.message?.includes('quota') ? '오늘 사용량을 초과했어요.' :
@@ -221,7 +232,7 @@ export default function HomeScreen() {
             {m.role === 'ai' && m.mapCategory && (
               <TouchableOpacity
                 style={styles.mapBtn}
-                onPress={() => router.push({ pathname: '/(tabs)/map', params: { category: m.mapCategory } })}>
+                onPress={() => router.push({ pathname: '/(tabs)/map', params: { category: m.mapCategory, query: m.restaurantQuery ?? '' } })}>
                 <Text style={styles.mapBtnText}>🗺️ 지도에서 보기</Text>
               </TouchableOpacity>
             )}
