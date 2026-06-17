@@ -165,7 +165,11 @@ export default function SchoolScreen() {
                 if (user) {
                   await supabase.from('profiles').update({ school: selected.name }).eq('id', user.id);
                 }
-                router.back();
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.replace('/(tabs)' as any);
+                }
               }}>
               <Text style={styles.nextBtnText}>다음 →</Text>
             </TouchableOpacity>
