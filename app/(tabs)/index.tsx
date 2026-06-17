@@ -235,7 +235,7 @@ export default function HomeScreen() {
             {m.role === 'ai' && m.mapCategory && (
               <TouchableOpacity
                 style={styles.mapBtn}
-                onPress={() => router.push({ pathname: '/(tabs)/map', params: { category: m.mapCategory, query: m.restaurantQuery ?? '' } })}>
+                onPress={() => router.push({ pathname: '/(tabs)/map', params: { category: m.mapCategory, query: m.restaurantQuery ?? '', t: String(Date.now()) } })}>
                 <Text style={styles.mapBtnText}>🗺️ 지도에서 보기</Text>
               </TouchableOpacity>
             )}

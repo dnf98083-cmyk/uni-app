@@ -853,7 +853,7 @@ function RegisterModal({
 // ── 화면 ────────────────────────────────────────────────────
 export default function MapScreen() {
   const { colors } = useTheme();
-  const { category, query: aiQuery } = useLocalSearchParams<{ category?: string; query?: string }>();
+  const { category, query: aiQuery, t: aiTimestamp } = useLocalSearchParams<{ category?: string; query?: string; t?: string }>();
   const webViewRef = useRef<WebView>(null);
   const iframeRef = useRef<any>(null);
   const placesRef = useRef<Place[]>([]);
@@ -930,7 +930,7 @@ export default function MapScreen() {
       }
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [category, aiQuery]);
+  }, [category, aiQuery, aiTimestamp]);
 
   const postToMap = useCallback((msg: object) => {
     if (Platform.OS === 'web') {
