@@ -862,8 +862,15 @@ export default function MapScreen() {
   useEffect(() => {
     if (category) return; // category effect가 대신 처리
     supabase.auth.getSession().then(async ({ data: { session } }) => {
-      const meta = session?.user?.user_metadata ?? {};
-      const name = (meta.school_name ?? '').trim();
+      if (!session?.user) return;
+      const meta = session.user.user_metadata ?? {};
+      // user_metadata 또는 profiles 테이블에서 학교명 읽기
+      let name = (meta.school_name ?? meta.schoolName ?? '').trim();
+      if (!name) {
+        const { data: profile } = await supabase
+          .from('profiles').select('school').eq('id', session.user.id).single();
+        name = (profile?.school ?? '').trim();
+      }
       if (!name) return;
       setSchoolQuery(name);
       try {
