@@ -120,6 +120,21 @@ const searchSchoolWeb = async (query: string) => {
 // ── Kakao API ────────────────────────────────────────────────
 const kakaoHeaders = () => ({ Authorization: `KakaoAK ${process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY ?? ''}` });
 
+const kakaoSearch = async (query: string, lat?: number, lng?: number, size = 20): Promise<any> => {
+  if (Platform.OS === 'web') {
+    const params = new URLSearchParams({ query, size: String(size) });
+    if (lat && lng) { params.set('x', String(lng)); params.set('y', String(lat)); params.set('radius', '3000'); }
+    const r = await fetch(`/api/kakao-search?${params}`);
+    return r.json();
+  }
+  const locPart = (lat && lng) ? `&x=${lng}&y=${lat}&radius=3000` : '';
+  const r = await fetch(
+    `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}${locPart}&size=${size}`,
+    { headers: kakaoHeaders() }
+  );
+  return r.json();
+};
+
 const mapDocs = (docs: any[], code: string): Place[] =>
   docs.map(d => ({
     id: d.id,
@@ -134,11 +149,7 @@ const mapDocs = (docs: any[], code: string): Place[] =>
   }));
 
 const searchSchoolKakao = async (query: string) => {
-  const res = await fetch(
-    `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}&size=1`,
-    { headers: kakaoHeaders() }
-  );
-  const data = await res.json();
+  const data = await kakaoSearch(query, undefined, undefined, 1);
   if (data.errorType) throw new Error(`Kakao 오류: ${data.message}`);
   if (!data.documents?.length) throw new Error('학교를 찾을 수 없어요');
   const d = data.documents[0];
@@ -152,26 +163,18 @@ const CAT_KEYWORD: Record<string, string> = {
 };
 
 const fetchPlacesKakao = async (lat: number, lng: number, cat: typeof CATEGORIES[0], schoolName: string): Promise<Place[]> => {
-  const h = kakaoHeaders();
-  const base = `x=${lng}&y=${lat}&radius=2000&size=20`;
-  const kw = (q: string, code?: string) =>
-    fetch(
-      `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(q)}${code ? `&category_group_code=${code}` : ''}&${base}`,
-      { headers: h }
-    ).then(r => r.json());
-
   const keyword = CAT_KEYWORD[cat.label] ?? cat.label;
   const query = `${schoolName} ${keyword}`;
 
   if (cat.label === '전체') {
     const [food, cafe] = await Promise.all([
-      kw(`${schoolName} 맛집`, 'FD6'),
-      kw(`${schoolName} 카페`, 'CE7'),
+      kakaoSearch(`${schoolName} 맛집`, lat, lng),
+      kakaoSearch(`${schoolName} 카페`, lat, lng),
     ]);
     return [...mapDocs(food.documents ?? [], 'FD6'), ...mapDocs(cafe.documents ?? [], 'CE7')];
   }
 
-  const data = await kw(query, cat.code);
+  const data = await kakaoSearch(query, lat, lng);
   return mapDocs(data.documents ?? [], cat.code);
 };
 
@@ -648,14 +651,8 @@ function RegisterModal({
     if (!searchQuery.trim()) return;
     setSearching(true); setError('');
     try {
-      const h = kakaoHeaders();
       const q = schoolName ? `${schoolName} ${searchQuery.trim()}` : searchQuery.trim();
-      const locPart = location ? `&x=${location.lng}&y=${location.lat}&radius=3000` : '';
-      const res = await fetch(
-        `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(q)}${locPart}&size=15`,
-        { headers: h }
-      );
-      const data = await res.json();
+      const data = await kakaoSearch(q, location?.lat, location?.lng, 15);
       setSearchResults(mapDocs(data.documents ?? [], ''));
     } catch { setError('검색 중 오류가 발생했어요'); }
     finally { setSearching(false); }
@@ -821,14 +818,8 @@ export default function MapScreen() {
             setLoading(true);
             setError('');
             try {
-              const h = kakaoHeaders();
               const q = `${name} ${restaurantName}`;
-              const locPart = `&x=${loc.lng}&y=${loc.lat}&radius=3000`;
-              const res = await fetch(
-                `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(q)}${locPart}&size=20`,
-                { headers: h }
-              );
-              const resData = await res.json();
+              const resData = await kakaoSearch(q, loc.lat, loc.lng);
               const results = mapDocs(resData.documents ?? [], '');
               if (results.length > 0) {
                 setPlaces(results);
@@ -956,14 +947,8 @@ export default function MapScreen() {
     setLoading(true);
     setError('');
     try {
-      const h = kakaoHeaders();
       const q = schoolQuery.trim() ? `${schoolQuery} ${nameQuery.trim()}` : nameQuery.trim();
-      const locPart = location ? `&x=${location.lng}&y=${location.lat}&radius=3000` : '';
-      const res = await fetch(
-        `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(q)}${locPart}&size=20`,
-        { headers: h }
-      );
-      const data = await res.json();
+      const data = await kakaoSearch(q, location?.lat, location?.lng);
       const results = mapDocs(data.documents ?? [], '');
       setPlaces(results);
       if (results.length > 0) {
