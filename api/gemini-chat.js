@@ -30,31 +30,34 @@ export default async function handler(req, res) {
 
   if (!message) { return res.status(400).json({ error: 'message required' }); }
 
-  const API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
-  const contents = [...history, { role: 'user', parts: [{ text: message }] }];
+  // Gemini 히스토리 형식 → OpenAI 형식 변환
+  const messages = [
+    ...(systemInstruction ? [{ role: 'system', content: systemInstruction }] : []),
+    ...history.map(h => ({
+      role: h.role === 'model' ? 'assistant' : 'user',
+      content: h.parts?.[0]?.text ?? '',
+    })),
+    { role: 'user', content: message },
+  ];
 
   try {
-    const r = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents,
-          ...(systemInstruction && {
-            systemInstruction: { parts: [{ text: systemInstruction }] },
-          }),
-          generationConfig: { temperature: 0.9 },
-        }),
-      }
-    );
+    const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages,
+        temperature: 0.9,
+      }),
+    });
     const data = await r.json();
     if (!r.ok) {
-      return res.status(r.status).json({ error: data.error?.message ?? 'Gemini API 오류' });
+      return res.status(r.status).json({ error: data.error?.message ?? 'Groq API 오류' });
     }
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    const text = data.choices?.[0]?.message?.content ?? '';
     res.status(200).json({ text });
   } catch (e) {
     res.status(500).json({ error: e.message });
