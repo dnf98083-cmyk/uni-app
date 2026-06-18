@@ -171,7 +171,7 @@ export default function HomeScreen() {
       setMessages(prev => [...prev, { role: 'ai', text: reply, mapCategory, restaurantQuery }]);
     } catch (e: any) {
       const msg = e?.message?.includes('API_KEY') ? 'API 키가 올바르지 않아요.' :
-        (e?.message?.includes('quota') || e?.message?.includes('RESOURCE_EXHAUSTED') || e?.message?.includes('429')) ? '오늘 사용량을 초과했어요.' :
+        (e?.message?.includes('quota') || e?.message?.includes('RESOURCE_EXHAUSTED') || e?.message?.includes('429')) ? '잠시 후 다시 시도해줘! (요청이 너무 많았어요 😅)' :
         '오류가 발생했어요: ' + (e?.message ?? '다시 시도해주세요.');
       setMessages(prev => [...prev, { role: 'ai', text: msg }]);
     } finally {
