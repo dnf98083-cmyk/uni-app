@@ -1,5 +1,3 @@
-import { GoogleGenAI } from '@google/genai';
-
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -11,16 +9,34 @@ export default async function handler(req, res) {
   const { message, systemInstruction, history = [] } = req.body;
   if (!message) { res.status(400).json({ error: 'message required' }); return; }
 
+  const API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+  const contents = [...history, { role: 'user', parts: [{ text: message }] }];
+
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.EXPO_PUBLIC_GEMINI_API_KEY });
-    const chat = ai.chats.create({
-      model: 'gemini-2.0-flash',
-      config: systemInstruction ? { systemInstruction } : undefined,
-      history,
-    });
-    const result = await chat.sendMessage({ message });
-    res.status(200).json({ text: result.text });
+    const r = await fetch(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': API_KEY,
+        },
+        body: JSON.stringify({
+          contents,
+          ...(systemInstruction && {
+            systemInstruction: { parts: [{ text: systemInstruction }] },
+          }),
+          generationConfig: { temperature: 0.9 },
+        }),
+      }
+    );
+    const data = await r.json();
+    if (!r.ok) {
+      return res.status(r.status).json({ error: data.error?.message ?? 'Gemini API 오류' });
+    }
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    res.status(200).json({ text });
   } catch (e) {
-    res.status(e.status ?? 500).json({ error: e.message });
+    res.status(500).json({ error: e.message });
   }
 }
