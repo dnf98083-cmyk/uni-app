@@ -777,6 +777,7 @@ export default function MapScreen() {
   const [nameQuery, setNameQuery] = useState('');
   const [selectedCat, setSelectedCat] = useState(CATEGORIES[0]);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const schoolQueryRef = useRef('');
   const [places, setPlaces] = useState<Place[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -788,8 +789,9 @@ export default function MapScreen() {
   const mapHtml = makeMapHtml(KAKAO_JS_KEY);
   const leafletHtml = makeLeafletHtml();
 
-  // places 최신값을 ref에 유지 (웹 메시지 핸들러 stale closure 방지)
+  // places / schoolQuery 최신값을 ref에 유지 (stale closure 방지)
   useEffect(() => { placesRef.current = places; }, [places]);
+  useEffect(() => { schoolQueryRef.current = schoolQuery; }, [schoolQuery]);
 
   // AI 지도보기 버튼 → AsyncStorage에서 검색어 읽어서 자동 검색
   useFocusEffect(
@@ -803,9 +805,20 @@ export default function MapScreen() {
         setPlaces([]);
         setSheetVisible(false);
 
-        const { data } = await supabase.auth.getUser();
-        const meta = data?.user?.user_metadata ?? {};
-        const name = (meta.school_name ?? meta.schoolName ?? '').trim();
+        // 이미 로드된 학교명 우선 사용, 없으면 Supabase에서 재조회
+        let name = schoolQueryRef.current.trim();
+        if (!name) {
+          const { data } = await supabase.auth.getUser();
+          const meta = data?.user?.user_metadata ?? {};
+          name = (meta.school_name ?? meta.schoolName ?? '').trim();
+          if (!name) {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user) {
+              const { data: profile } = await supabase.from('profiles').select('school').eq('id', session.user.id).single();
+              name = (profile?.school ?? '').trim();
+            }
+          }
+        }
         if (!name) return;
         setSchoolQuery(name);
 
