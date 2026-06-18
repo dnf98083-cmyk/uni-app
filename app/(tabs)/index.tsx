@@ -49,8 +49,8 @@ function extractFirstRestaurantName(text: string): string | null {
     if (quoted) return quoted[1].trim();
     if (raw.length >= 2 && raw.length <= 15) return raw;
   }
-  // 2. 따옴표/홑따옴표로 감싼 이름 '가게명' or '가게명'
-  const quoteMatches = [...text.matchAll(/['']([^'']{2,15})['']/g)];
+  // 2. 따옴표/홑따옴표로 감싼 이름 - 일반('), 유니코드('') 모두 처리
+  const quoteMatches = [...text.matchAll(/['‘’]([^'‘’]{2,15})['‘’]/g)];
   for (const m of quoteMatches) {
     const raw = m[1].trim();
     if (!SKIP_WORDS.some(k => raw === k)) return raw;
