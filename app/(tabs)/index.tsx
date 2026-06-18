@@ -1,4 +1,4 @@
-import { createGeminiChat } from '@/lib/gemini';
+import { buildSystemPrompt } from '@/lib/gemini';
 import { formatTimetableContext, isCommunityQuery, isTimetableQuery, searchLocalData } from '@/lib/localSearch';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/lib/ThemeContext';
@@ -63,7 +63,7 @@ export default function HomeScreen() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
-  const chatRef = useRef<ReturnType<typeof createGeminiChat> | null>(null);
+  const historyRef = useRef<Array<{ role: string; parts: Array<{ text: string }> }>>([]);
   const schoolInfoRef = useRef({ name: '대학교', region: '' });
 
   const loadUserSchool = useCallback(() => {
@@ -75,7 +75,7 @@ export default function HomeScreen() {
       const region = meta.school_region ?? '';
       setSchoolName(name);
       schoolInfoRef.current = { name: name || '대학교', region };
-      chatRef.current = null;
+      historyRef.current = [];
       setMessages([{
         role: 'ai',
         text: name
@@ -87,12 +87,20 @@ export default function HomeScreen() {
 
   useFocusEffect(loadUserSchool);
 
-  const getChat = () => {
-    if (!chatRef.current) {
-      const { name, region } = schoolInfoRef.current;
-      chatRef.current = createGeminiChat(name, region);
-    }
-    return chatRef.current;
+  const sendToGemini = async (prompt: string): Promise<string> => {
+    const { name, region } = schoolInfoRef.current;
+    const res = await fetch('/api/gemini-chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: prompt,
+        systemInstruction: buildSystemPrompt(name, region),
+        history: historyRef.current,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error ?? 'API 오류');
+    return data.text ?? '';
   };
 
   // 커뮤니티 게시글 검색 (Supabase)
@@ -161,8 +169,9 @@ export default function HomeScreen() {
         ? `[앱 내 정보]\n${contexts.join('\n\n')}\n\n[사용자 질문]\n${text}`
         : text;
 
-      const result = await getChat().sendMessage({ message: prompt });
-      const reply = result.text ?? '';
+      historyRef.current = [...historyRef.current, { role: 'user', parts: [{ text: prompt }] }];
+      const reply = await sendToGemini(prompt);
+      historyRef.current = [...historyRef.current, { role: 'model', parts: [{ text: reply }] }];
       const mapCategory = detectMapCategory(text) ?? detectMapCategory(reply) ?? undefined;
       const restaurantQuery = mapCategory ? (extractFirstRestaurantName(reply) ?? undefined) : undefined;
       setMessages(prev => [...prev, { role: 'ai', text: reply, mapCategory, restaurantQuery }]);
