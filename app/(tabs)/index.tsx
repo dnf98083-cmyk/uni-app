@@ -1,9 +1,8 @@
-import { createGeminiModel } from '@/lib/gemini';
+import { createGeminiChat } from '@/lib/gemini';
 import { formatTimetableContext, isCommunityQuery, isTimetableQuery, searchLocalData } from '@/lib/localSearch';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/lib/ThemeContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { ChatSession, GenerativeModel } from '@google/generative-ai';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import {
@@ -64,8 +63,8 @@ export default function HomeScreen() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
-  const chatRef = useRef<ChatSession | null>(null);
-  const modelRef = useRef<GenerativeModel | null>(null);
+  const chatRef = useRef<ReturnType<typeof createGeminiChat> | null>(null);
+  const schoolInfoRef = useRef({ name: '대학교', region: '' });
 
   const loadUserSchool = useCallback(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -75,7 +74,7 @@ export default function HomeScreen() {
       const name = meta.school_name ?? '';
       const region = meta.school_region ?? '';
       setSchoolName(name);
-      modelRef.current = createGeminiModel(name || '대학교', region);
+      schoolInfoRef.current = { name: name || '대학교', region };
       chatRef.current = null;
       setMessages([{
         role: 'ai',
@@ -89,11 +88,9 @@ export default function HomeScreen() {
   useFocusEffect(loadUserSchool);
 
   const getChat = () => {
-    if (!modelRef.current) {
-      modelRef.current = createGeminiModel('대학교', '');
-    }
     if (!chatRef.current) {
-      chatRef.current = modelRef.current.startChat();
+      const { name, region } = schoolInfoRef.current;
+      chatRef.current = createGeminiChat(name, region);
     }
     return chatRef.current;
   };
@@ -164,8 +161,8 @@ export default function HomeScreen() {
         ? `[앱 내 정보]\n${contexts.join('\n\n')}\n\n[사용자 질문]\n${text}`
         : text;
 
-      const result = await getChat().sendMessage(prompt);
-      const reply = result.response.text();
+      const result = await getChat().sendMessage({ message: prompt });
+      const reply = result.text ?? '';
       const mapCategory = detectMapCategory(text) ?? detectMapCategory(reply) ?? undefined;
       const restaurantQuery = mapCategory ? (extractFirstRestaurantName(reply) ?? undefined) : undefined;
       setMessages(prev => [...prev, { role: 'ai', text: reply, mapCategory, restaurantQuery }]);

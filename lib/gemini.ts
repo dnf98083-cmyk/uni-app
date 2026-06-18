@@ -1,8 +1,7 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 
 const API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? '';
-
-const genAI = new GoogleGenerativeAI(API_KEY);
+const ai = new GoogleGenAI({ apiKey: API_KEY });
 
 export function buildSystemPrompt(schoolName: string, schoolRegion: string): string {
   return `
@@ -21,7 +20,7 @@ export function buildSystemPrompt(schoolName: string, schoolRegion: string): str
 
 ## 정보 우선순위 (중요!)
 1. 메시지에 [앱 내 정보] 섹션이 있으면 → 반드시 그 내용을 최우선으로 활용해
-2. [앱 내 정보]에 없는 내용 → Google 검색 또는 네 지식으로 보완해
+2. [앱 내 정보]에 없는 내용 → 네 지식으로 보완해
 3. 두 정보가 충돌하면 → [앱 내 정보]를 우선시해
 
 ## [앱 내 정보] 유형 안내
@@ -49,16 +48,24 @@ export function buildSystemPrompt(schoolName: string, schoolRegion: string): str
 `;
 }
 
-export function createGeminiModel(schoolName: string, schoolRegion: string) {
-  return genAI.getGenerativeModel({
+export function createGeminiChat(schoolName: string, schoolRegion: string) {
+  return ai.chats.create({
     model: 'gemini-2.0-flash',
-    systemInstruction: buildSystemPrompt(schoolName, schoolRegion),
+    config: {
+      systemInstruction: buildSystemPrompt(schoolName, schoolRegion),
+    },
   });
 }
 
-// 기본 모델 (학교 정보 없을 때 fallback)
-export const geminiModel = createGeminiModel('대학교', '');
-
-export const geminiVision = genAI.getGenerativeModel({
-  model: 'gemini-2.0-flash',
-});
+export async function geminiVisionAnalyze(imageBase64: string, prompt: string): Promise<string> {
+  const response = await ai.models.generateContent({
+    model: 'gemini-2.0-flash',
+    contents: [{
+      parts: [
+        { inlineData: { mimeType: 'image/jpeg', data: imageBase64 } },
+        { text: prompt },
+      ],
+    }],
+  });
+  return response.text ?? '';
+}

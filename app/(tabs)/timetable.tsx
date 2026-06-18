@@ -1,5 +1,5 @@
 import * as ImagePicker from 'expo-image-picker';
-import { geminiVision } from '@/lib/gemini';
+import { geminiVisionAnalyze } from '@/lib/gemini';
 import { useState, useEffect } from 'react';
 import { useWindowDimensions } from 'react-native';
 import { useTheme } from '@/lib/ThemeContext';
@@ -249,11 +249,7 @@ export default function TimetableScreen() {
 
 예시 출력: [{"name":"자료구조","room":"공학관 301","professor":"홍길동","day":0,"startTime":"09:00","endTime":"10:30"},{"name":"자료구조","room":"공학관 301","professor":"홍길동","day":2,"startTime":"09:00","endTime":"10:30"}]`;
 
-      const res = await geminiVision.generateContent([
-        { inlineData: { mimeType: 'image/jpeg', data: base64 } },
-        { text: prompt },
-      ]);
-      const raw = res.response.text().trim();
+      const raw = (await geminiVisionAnalyze(base64, prompt)).trim();
       // JSON 배열 추출 (앞뒤 마크다운 블록 제거)
       const clean = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
       const match = clean.match(/\[[\s\S]*\]/);

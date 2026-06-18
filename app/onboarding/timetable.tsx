@@ -1,5 +1,5 @@
 import * as ImagePicker from 'expo-image-picker';
-import { geminiVision } from '@/lib/gemini';
+import { geminiVisionAnalyze } from '@/lib/gemini';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import {
@@ -61,12 +61,7 @@ export default function TimetableOnboardingScreen() {
 강의실 정보가 없으면 빈 문자열로 해줘.
 반드시 JSON 배열만 반환하고, 다른 설명은 하지 마.`;
 
-      const result = await geminiVision.generateContent([
-        { inlineData: { mimeType: 'image/jpeg', data: base64 } },
-        { text: prompt },
-      ]);
-
-      const text = result.response.text().trim();
+      const text = (await geminiVisionAnalyze(base64, prompt)).trim();
       const jsonStr = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
       const classes = JSON.parse(jsonStr);
 
