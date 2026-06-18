@@ -40,7 +40,7 @@ export default async function handler(req, res) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${API_KEY}`,
+          'x-goog-api-key': API_KEY,
         },
         body: JSON.stringify({
           contents,
