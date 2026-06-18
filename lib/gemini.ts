@@ -53,8 +53,6 @@ export function createGeminiModel(schoolName: string, schoolRegion: string) {
   return genAI.getGenerativeModel({
     model: 'gemini-2.0-flash',
     systemInstruction: buildSystemPrompt(schoolName, schoolRegion),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    tools: [{ googleSearch: {} } as any],
   });
 }
 
