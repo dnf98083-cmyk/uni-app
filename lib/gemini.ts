@@ -58,14 +58,12 @@ export function createGeminiChat(schoolName: string, schoolRegion: string) {
 }
 
 export async function geminiVisionAnalyze(imageBase64: string, prompt: string): Promise<string> {
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.0-flash',
-    contents: [{
-      parts: [
-        { inlineData: { mimeType: 'image/jpeg', data: imageBase64 } },
-        { text: prompt },
-      ],
-    }],
+  const res = await fetch('/api/vision-analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ imageBase64, prompt }),
   });
-  return response.text ?? '';
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? 'Vision 분석 오류');
+  return data.text ?? '';
 }
