@@ -39,17 +39,23 @@ function detectMapCategory(text: string): string | null {
 }
 
 function extractFirstRestaurantName(text: string): string | null {
+  const SKIP_WORDS = ['맛집', '음식점', '식당', '가게', '추천', '근처', '주변', '학교', '메뉴', '위치', '특징'];
+  // 1. **볼드** 텍스트
   const boldMatches = [...text.matchAll(/\*\*([^*\n]+?)\*\*/g)];
   for (const m of boldMatches) {
     const raw = m[1].trim();
-    if (raw.endsWith(':') || raw.endsWith('쪽') || raw.endsWith('**')) continue;
-    if (['메뉴', '위치', '특징', '분위기', '위치/특징'].some(k => raw.startsWith(k))) continue;
-    // 따옴표 안에 있는 이름 우선 추출 ('멘텐' → 멘텐)
+    if (raw.endsWith(':') || SKIP_WORDS.some(k => raw === k || raw.startsWith(k))) continue;
     const quoted = raw.match(/['''"]([^'''"\s]{1,15})['''"]/);
     if (quoted) return quoted[1].trim();
-    // 15자 이내 순수 이름
     if (raw.length >= 2 && raw.length <= 15) return raw;
   }
+  // 2. 따옴표/홑따옴표로 감싼 이름 '가게명' or '가게명'
+  const quoteMatches = [...text.matchAll(/['']([^'']{2,15})['']/g)];
+  for (const m of quoteMatches) {
+    const raw = m[1].trim();
+    if (!SKIP_WORDS.some(k => raw === k)) return raw;
+  }
+  // 3. 번호 목록 첫 항목
   const listMatch = text.match(/^\d+[\.\)]\s*([^\n\-:：'''"/]{2,12})/m);
   if (listMatch) return listMatch[1].trim();
   return null;
@@ -172,7 +178,10 @@ export default function HomeScreen() {
       historyRef.current = [...historyRef.current, { role: 'user', parts: [{ text: prompt }] }];
       const reply = await sendToGemini(prompt);
       historyRef.current = [...historyRef.current, { role: 'model', parts: [{ text: reply }] }];
-      const mapCategory = detectMapCategory(text) ?? detectMapCategory(reply) ?? undefined;
+      // reply에서 구체적 카테고리 우선, 없으면 사용자 질문에서 감지
+      const replyCategory = detectMapCategory(reply);
+      const textCategory = detectMapCategory(text);
+      const mapCategory = (replyCategory && replyCategory !== '전체' ? replyCategory : textCategory) ?? undefined;
       const restaurantQuery = mapCategory ? (extractFirstRestaurantName(reply) ?? undefined) : undefined;
       setMessages(prev => [...prev, { role: 'ai', text: reply, mapCategory, restaurantQuery }]);
     } catch (e: any) {
